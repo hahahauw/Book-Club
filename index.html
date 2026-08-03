@@ -7,6 +7,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Space+Grotesk:wght@400;500;600&family=Courier+Prime&display=swap" rel="stylesheet">
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, onSnapshot,
+    query, orderBy, doc, updateDoc, arrayUnion
+  } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA-G9WsH-sMdTzXvylNSJ1b-l5XkjBEol4",
+    authDomain: "book-enthusiast-club.firebaseapp.com",
+    projectId: "book-enthusiast-club",
+    storageBucket: "book-enthusiast-club.firebasestorage.app",
+    messagingSenderId: "100530002767",
+    appId: "1:100530002767:web:4c65036568a65dc154c33a",
+    measurementId: "G-DQS9JYY81F"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // Expose what the rest of the page needs, since this is a module scope
+  window._db = db;
+  window._firestore = { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, arrayUnion };
+</script>
 <style>
   :root {
     --paper: #f4efe4;
@@ -845,8 +869,7 @@
       <div class="card">
         <div class="bookshelf" id="bookshelf">
           <div class="empty-shelf">
-            The shelf is waiting for its first books.
-            <span class="sub">Be the first to add one below!</span>
+            Loading the shelf...
           </div>
         </div>
       </div>
@@ -946,7 +969,28 @@
 
     // ====== STATE ======
     let uploadedImageUrl = null;
-    let books = JSON.parse(localStorage.getItem('clubBooks_v2') || '[]');
+    let books = []; // populated live from Firestore below
+    let bookDocIds = []; // Firestore doc id for each book, same order as `books`
+
+    const db = window._db;
+    const { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, arrayUnion } = window._firestore;
+    const booksCol = collection(db, 'books');
+    const booksQuery = query(booksCol, orderBy('date', 'desc'));
+
+    // Live-updates: fires immediately with current data, then again whenever
+    // ANY member adds a book or comment, on ANY device.
+    onSnapshot(booksQuery, (snapshot) => {
+      books = [];
+      bookDocIds = [];
+      snapshot.forEach((docSnap) => {
+        books.push(docSnap.data());
+        bookDocIds.push(docSnap.id);
+      });
+      renderBooks();
+    }, (err) => {
+      console.error('Firestore sync error:', err);
+      bookshelf.innerHTML = `<div class="empty-shelf">Couldn't load the shelf right now.<span class="sub">Check your connection and refresh.</span></div>`;
+    });
 
     // ====== DOM ELEMENTS ======
     const bookshelf = document.getElementById('bookshelf');
@@ -1158,10 +1202,11 @@
       btn.classList.toggle('open');
     }
 
-    function addComment(event, bookIndex) {
+    async function addComment(event, bookIndex) {
       event.preventDefault();
       const nameInput = document.getElementById(`comment-name-${bookIndex}`);
       const textInput = document.getElementById(`comment-text-${bookIndex}`);
+      const submitBtn = event.target.querySelector('button[type="submit"]');
 
       const comment = {
         name: nameInput.value,
@@ -1169,35 +1214,34 @@
         date: new Date().toISOString()
       };
 
-      if (!books[bookIndex].comments) books[bookIndex].comments = [];
-      books[bookIndex].comments.push(comment);
+      const docId = bookDocIds[bookIndex];
+      submitBtn.disabled = true;
+      submitBtn.textContent = '...';
 
-      localStorage.setItem('clubBooks_v2', JSON.stringify(books));
-
-      document.getElementById(`comment-list-${bookIndex}`).innerHTML = renderCommentList(books[bookIndex].comments);
-
-      const toggleBtn = document.querySelectorAll('.comment-toggle')[bookIndex];
-      const count = books[bookIndex].comments.length;
-      toggleBtn.querySelector('.count').textContent = `${count} comment${count !== 1 ? 's' : ''}`;
-
-      nameInput.value = '';
-      textInput.value = '';
-
-      // Recalculate max-height since content grew
-      const section = document.getElementById(`comments-${bookIndex}`);
-      if (section.classList.contains('active')) {
-        section.style.maxHeight = 'none';
-        const h = section.scrollHeight;
-        section.style.maxHeight = h + 'px';
+      try {
+        // arrayUnion merges safely even if two members comment at the same moment
+        await updateDoc(doc(db, 'books', docId), {
+          comments: arrayUnion(comment)
+        });
+        // No manual re-render needed here — onSnapshot above will fire
+        // automatically for this browser AND every other member's browser.
+        nameInput.value = '';
+        textInput.value = '';
+      } catch (err) {
+        console.error('Failed to post comment:', err);
+        alert('Could not post your comment — check your connection and try again.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post';
       }
     }
 
     // ====== FORM SUBMISSION ======
-    form.addEventListener('submit', function(e) {
+    form.addEventListener('submit', async function(e) {
       e.preventDefault();
+      const submitBtn = form.querySelector('button[type="submit"]');
 
       const book = {
-        id: Date.now(),
         name: document.getElementById('name').value,
         title: document.getElementById('bookTitle').value,
         author: document.getElementById('author').value,
@@ -1208,24 +1252,35 @@
         date: new Date().toISOString()
       };
 
-      books.unshift(book);
-      localStorage.setItem('clubBooks_v2', JSON.stringify(books));
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Adding...';
 
-      renderBooks();
-      form.reset();
-      uploadPreview.classList.remove('visible');
-      uploadPreview.src = '';
-      uploadStatus.textContent = '';
-      uploadedImageUrl = null;
+      try {
+        await addDoc(booksCol, book);
+        // onSnapshot handles re-rendering for everyone, including this browser
 
-      successMsg.classList.add('visible');
-      setTimeout(() => { successMsg.classList.remove('visible'); }, 4000);
+        form.reset();
+        uploadPreview.classList.remove('visible');
+        uploadPreview.src = '';
+        uploadStatus.textContent = '';
+        uploadedImageUrl = null;
 
-      document.querySelector('.bookshelf').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        successMsg.classList.add('visible');
+        setTimeout(() => { successMsg.classList.remove('visible'); }, 4000);
+
+        document.querySelector('.bookshelf').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (err) {
+        console.error('Failed to add book:', err);
+        alert('Could not add your book — check your connection and try again.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add to the shelf';
+      }
     });
 
     // ====== INIT ======
-    renderBooks();
+    // No manual render call needed — onSnapshot above fires immediately
+    // with the current shelf contents as soon as Firestore responds.
   </script>
 </body>
 </html>
