@@ -27,7 +27,7 @@ const limits = { name: 60, title: 160, author: 100, genre: 80, why: 800, comment
 
 // Add the Google email addresses of club officers before publishing.
 // Example: ["officer@example.edu", "librarian@example.edu"]
-const ADMIN_EMAILS = ["rizalded60@gmail.com"];
+const ADMIN_EMAILS = [rizalded60@gmail.com];
 
 const state = {
   uploadProvider: localStorage.getItem("uploadProvider") || "",
