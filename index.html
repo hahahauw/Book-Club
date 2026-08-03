@@ -27,9 +27,10 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // Expose what the rest of the page needs, since this is a module scope
-  window._db = db;
-  window._firestore = { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, arrayUnion };
+  // Everything below runs in THIS SAME module script — no cross-script
+  // handoff, no race condition, no window globals needed.
+  window._firebaseReady = { db, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, arrayUnion };
+  window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <style>
   :root {
@@ -972,26 +973,6 @@
     let books = []; // populated live from Firestore below
     let bookDocIds = []; // Firestore doc id for each book, same order as `books`
 
-    const db = window._db;
-    const { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, arrayUnion } = window._firestore;
-    const booksCol = collection(db, 'books');
-    const booksQuery = query(booksCol, orderBy('date', 'desc'));
-
-    // Live-updates: fires immediately with current data, then again whenever
-    // ANY member adds a book or comment, on ANY device.
-    onSnapshot(booksQuery, (snapshot) => {
-      books = [];
-      bookDocIds = [];
-      snapshot.forEach((docSnap) => {
-        books.push(docSnap.data());
-        bookDocIds.push(docSnap.id);
-      });
-      renderBooks();
-    }, (err) => {
-      console.error('Firestore sync error:', err);
-      bookshelf.innerHTML = `<div class="empty-shelf">Couldn't load the shelf right now.<span class="sub">Check your connection and refresh.</span></div>`;
-    });
-
     // ====== DOM ELEMENTS ======
     const bookshelf = document.getElementById('bookshelf');
     const form = document.getElementById('recForm');
@@ -1001,6 +982,49 @@
     const uploadPreview = document.getElementById('uploadPreview');
     const uploadStatus = document.getElementById('uploadStatus');
     const setupModal = document.getElementById('setupModal');
+
+    let firestoreExports = null; // filled in once Firebase finishes loading
+    let booksCol = null;
+
+    // If Firebase hasn't reported ready within 8s, something is actually
+    // wrong (blocked script, bad config, offline) — show that instead of
+    // spinning forever.
+    const firebaseTimeout = setTimeout(() => {
+      if (!firestoreExports) {
+        bookshelf.innerHTML = `<div class="empty-shelf">Couldn't connect to the shelf.<span class="sub">Reload the page, or check your internet connection. If this keeps happening, the site owner may need to check the Firebase setup.</span></div>`;
+      }
+    }, 8000);
+
+    function initFirestoreSync() {
+      clearTimeout(firebaseTimeout);
+      const { db, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, arrayUnion } = window._firebaseReady;
+      firestoreExports = { addDoc, onSnapshot, doc, updateDoc, arrayUnion };
+      booksCol = collection(db, 'books');
+      const booksQuery = query(booksCol, orderBy('date', 'desc'));
+
+      // Live-updates: fires immediately with current data, then again whenever
+      // ANY member adds a book or comment, on ANY device.
+      onSnapshot(booksQuery, (snapshot) => {
+        books = [];
+        bookDocIds = [];
+        snapshot.forEach((docSnap) => {
+          books.push(docSnap.data());
+          bookDocIds.push(docSnap.id);
+        });
+        renderBooks();
+      }, (err) => {
+        console.error('Firestore sync error:', err);
+        bookshelf.innerHTML = `<div class="empty-shelf">Couldn't load the shelf right now.<span class="sub">${err.code === 'permission-denied' ? 'The database rules are blocking access — the site owner needs to update Firestore security rules.' : 'Check your connection and refresh.'}</span></div>`;
+      });
+    }
+
+    // If Firebase already finished loading before this script ran, go now.
+    // Otherwise wait for the event it fires when ready. Either order is safe.
+    if (window._firebaseReady) {
+      initFirestoreSync();
+    } else {
+      window.addEventListener('firebase-ready', initFirestoreSync, { once: true });
+    }
 
     // ====== SETUP MODAL ======
     function showSetup() {
@@ -1219,6 +1243,8 @@
       submitBtn.textContent = '...';
 
       try {
+        const { updateDoc, doc, arrayUnion } = firestoreExports;
+        const { db } = window._firebaseReady;
         // arrayUnion merges safely even if two members comment at the same moment
         await updateDoc(doc(db, 'books', docId), {
           comments: arrayUnion(comment)
@@ -1256,7 +1282,10 @@
       submitBtn.textContent = 'Adding...';
 
       try {
-        await addDoc(booksCol, book);
+        if (!firestoreExports || !booksCol) {
+          throw new Error('Still connecting to the shelf — try again in a moment.');
+        }
+        await firestoreExports.addDoc(booksCol, book);
         // onSnapshot handles re-rendering for everyone, including this browser
 
         form.reset();
