@@ -18,6 +18,9 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  /* JavaScript uses the hidden attribute to swap placeholders for real covers. */
+  [hidden] { display: none !important; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
