@@ -75,14 +75,28 @@
       </div>
       <div class="card due-card">
         <div class="due-card-inner">
-          <div class="book-cover-placeholder">
-            <span>Your First<br>Book Here</span>
-          </div>
-          <div class="book-info">
-            <h3>The Current Pick</h3>
-            <p class="author">by Author Name</p>
-            <p class="desc">This is where you'll put a short description of whatever book the club is reading right now. Keep it casual — just a sentence or two about why you picked it or what it's about.</p>
-            <span class="due-stamp"><span class="dot"></span> Next meeting: [Date]</span>
+            <img class="book-cover-img" id="currentPickCover" alt="Cover of the current pick" hidden>
+            <div class="book-cover-placeholder" id="currentPickPlaceholder">
+              <span>Your First<br>Book Here</span>
+            </div>
+            <div class="book-info">
+              <p class="section-kicker">Club feature</p>
+              <h3 id="currentPickTitle">The Current Pick</h3>
+              <p class="author" id="currentPickAuthor">Choose a book from the shelf</p>
+              <p class="desc" id="currentPickDescription">When your officers select a member recommendation, it will become the club’s Current Pick right here.</p>
+              <span class="due-stamp"><span class="dot"></span> <span id="currentPickMeta">Waiting for the next read</span></span>
+              <div class="officer-controls">
+                <button type="button" data-action="sign-in" class="setup-link-btn" id="officerSignIn">Officer sign in</button>
+                <div id="officerPicker" hidden>
+                  <label for="currentPickSelect">Choose from the shelf</label>
+                  <div class="officer-picker-row">
+                    <select id="currentPickSelect"></select>
+                    <button type="button" data-action="save-current-pick" class="setup-link-btn">Feature this book</button>
+                    <button type="button" data-action="sign-out" class="text-link-btn">Sign out</button>
+                  </div>
+                </div>
+                <p class="officer-status" id="officerStatus" aria-live="polite"></p>
+              </div>
           </div>
         </div>
         <div class="due-card-edge"></div>
@@ -96,7 +110,7 @@
         <h2>The Member Bookshelf</h2>
         <span class="section-rule"></span>
       </div>
-      <p class="section-sub">Books recommended by our members. Tap the comment count to join the discussion.</p>
+        <p class="section-sub">Books recommended by our members. Select a card to bring a book into focus; tap the comment count to join the discussion.</p>
       <div class="card">
         <div class="bookshelf" id="bookshelf">
           <div class="empty-shelf">
@@ -191,6 +205,20 @@
     </footer>
   </div>
 
-    <script type="module" src="app.js"></script>
+  <div class="setup-modal" id="bookDetailModal" role="dialog" aria-modal="true" aria-labelledby="bookDetailTitle" hidden>
+    <div class="setup-card book-detail-card">
+      <button type="button" class="modal-close-btn" data-action="close-book-detail" aria-label="Close book details">×</button>
+      <img id="bookDetailCover" class="book-detail-cover" alt="" hidden>
+      <div id="bookDetailPlaceholder" class="book-detail-cover-placeholder"></div>
+      <div class="book-detail-content">
+        <h3 id="bookDetailTitle"></h3>
+        <p id="bookDetailAuthor" class="author"></p>
+        <p id="bookDetailWhy"></p>
+        <p id="bookDetailMeta"></p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
 </body>
 </html>

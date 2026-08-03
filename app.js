@@ -1,8 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, onSnapshot,
-  query, orderBy, doc, updateDoc, arrayUnion
+  query, orderBy, doc, updateDoc, setDoc, arrayUnion
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
+import {
+  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
+} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
 
 // Book Enthusiasts Club — GitHub Pages client application
 const firebaseConfig = {
@@ -15,10 +18,16 @@ const firebaseConfig = {
   measurementId: "G-DQS9JYY81F"
 };
 
-const db = getFirestore(initializeApp(firebaseConfig));
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 const booksCollection = collection(db, "books");
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const limits = { name: 60, title: 160, author: 100, genre: 80, why: 800, comment: 500 };
+
+// Add the Google email addresses of club officers before publishing.
+// Example: ["officer@example.edu", "librarian@example.edu"]
+const ADMIN_EMAILS = ["replace-with-officer-email@example.com"];
 
 const state = {
   uploadProvider: localStorage.getItem("uploadProvider") || "",
@@ -26,7 +35,9 @@ const state = {
   imgbbKey: localStorage.getItem("imgbbKey") || "",
   uploadedImageUrl: null,
   books: [],
-  isUploading: false
+  isUploading: false,
+  currentPickId: null,
+  user: null
 };
 
 const elements = {
@@ -37,7 +48,18 @@ const elements = {
   coverUpload: document.getElementById("coverUpload"),
   uploadPreview: document.getElementById("uploadPreview"),
   uploadStatus: document.getElementById("uploadStatus"),
-  setupModal: document.getElementById("setupModal")
+  setupModal: document.getElementById("setupModal"),
+  currentPickCover: document.getElementById("currentPickCover"),
+  currentPickPlaceholder: document.getElementById("currentPickPlaceholder"),
+  currentPickTitle: document.getElementById("currentPickTitle"),
+  currentPickAuthor: document.getElementById("currentPickAuthor"),
+  currentPickDescription: document.getElementById("currentPickDescription"),
+  currentPickMeta: document.getElementById("currentPickMeta"),
+  currentPickSelect: document.getElementById("currentPickSelect"),
+  officerPicker: document.getElementById("officerPicker"),
+  officerSignIn: document.getElementById("officerSignIn"),
+  officerStatus: document.getElementById("officerStatus"),
+  bookDetailModal: document.getElementById("bookDetailModal")
 };
 
 function escapeHtml(value) {
@@ -99,6 +121,10 @@ document.addEventListener("click", (event) => {
   if (action === "close-setup") closeSetup();
   if (action === "save-cloudinary") saveUploadProvider("cloudinary");
   if (action === "save-imgbb") saveUploadProvider("imgbb");
+  if (action === "sign-in") signInOfficer();
+  if (action === "sign-out") signOut(auth);
+  if (action === "save-current-pick") saveCurrentPick();
+  if (action === "close-book-detail") closeBookDetail();
   const tab = event.target.closest(".provider-tab");
   if (tab) switchProviderTab(tab.dataset.provider);
 });
@@ -108,6 +134,7 @@ elements.setupModal.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && elements.setupModal.classList.contains("active")) closeSetup();
+  if (event.key === "Escape" && !elements.bookDetailModal.hidden) closeBookDetail();
 });
 if (!state.uploadProvider && localStorage.getItem("setupDismissed") !== "true") {
   setTimeout(showSetup, 600);
@@ -186,6 +213,67 @@ async function uploadToImgbb(file) {
 }
 
 // ====== FIRESTORE AND BOOKSHELF ======
+function isOfficer() {
+  return Boolean(state.user?.email && ADMIN_EMAILS.includes(state.user.email.toLowerCase()));
+}
+
+function setOfficerStatus(message = "") {
+  elements.officerStatus.textContent = message;
+}
+
+function updateOfficerControls() {
+  const officer = isOfficer();
+  elements.officerPicker.hidden = !officer;
+  elements.officerSignIn.hidden = officer;
+  if (state.user && !officer) setOfficerStatus(`${state.user.email} is not an approved officer.`);
+  if (!state.user) setOfficerStatus("Officers can sign in to choose the club feature.");
+  if (officer) setOfficerStatus(`Signed in as ${state.user.email}`);
+}
+
+onAuthStateChanged(auth, (user) => {
+  state.user = user;
+  updateOfficerControls();
+});
+
+async function signInOfficer() {
+  try {
+    await signInWithPopup(auth, new GoogleAuthProvider());
+  } catch (error) {
+    console.error("Officer sign-in failed:", error);
+    setOfficerStatus("Sign-in was cancelled or unavailable. Check the Firebase setup instructions.");
+  }
+}
+
+async function saveCurrentPick() {
+  if (!isOfficer()) return;
+  const bookId = elements.currentPickSelect.value;
+  if (!bookId) return setOfficerStatus("Choose a book first.");
+  try {
+    await setDoc(doc(db, "siteSettings", "currentPick"), { bookId, updatedAt: new Date().toISOString() }, { merge: true });
+    setOfficerStatus("The Current Pick has been updated.");
+  } catch (error) {
+    console.error("Could not save Current Pick:", error);
+    setOfficerStatus("Couldn’t save the Current Pick. Check your Firestore rules.");
+  }
+}
+
+function renderCurrentPick(book) {
+  const hasCover = Boolean(book?.coverUrl);
+  elements.currentPickCover.hidden = !hasCover;
+  elements.currentPickPlaceholder.hidden = hasCover;
+  if (hasCover) elements.currentPickCover.src = book.coverUrl;
+  elements.currentPickPlaceholder.querySelector("span").innerHTML = book ? escapeHtml(book.title).replace(/ /g, "<br>") : "Your First<br>Book Here";
+  elements.currentPickTitle.textContent = book?.title || "The Current Pick";
+  elements.currentPickAuthor.textContent = book ? `by ${book.author}` : "Choose a book from the shelf";
+  elements.currentPickDescription.textContent = book?.why || "When your officers select a member recommendation, it will become the club’s Current Pick right here.";
+  elements.currentPickMeta.textContent = book ? `Recommended by ${book.name}${book.genre ? ` · ${book.genre}` : ""}` : "Waiting for the next read";
+}
+
+onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => {
+  state.currentPickId = snapshot.data()?.bookId || null;
+  renderCurrentPick(state.books.find((book) => book.id === state.currentPickId));
+}, (error) => console.error("Current Pick settings error:", error));
+
 function expandedBookIds() {
   return new Set([...elements.bookshelf.querySelectorAll(".comments-section.active")].map((section) => section.dataset.bookId));
 }
@@ -203,13 +291,14 @@ function renderBooks() {
   const openBooks = expandedBookIds();
   if (!state.books.length) {
     elements.bookshelf.innerHTML = '<div class="empty-shelf">The shelf is waiting for its first books.<span class="sub">Be the first to add one below!</span></div>';
+    populateCurrentPickOptions();
     return;
   }
   elements.bookshelf.innerHTML = state.books.map((book) => {
     const isOpen = openBooks.has(book.id);
     const comments = book.comments || [];
     return `
-      <div class="book-card" data-book-id="${book.id}">
+      <div class="book-card" data-book-id="${book.id}" role="button" tabindex="0" aria-label="Open details for ${escapeHtml(book.title)}">
         ${book.coverUrl
           ? `<img class="book-card-cover" src="${escapeHtml(book.coverUrl)}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy">`
           : `<div class="book-card-cover-placeholder">${escapeHtml(book.title)}</div>`}
@@ -235,15 +324,65 @@ function renderBooks() {
         </div>
       </div>`;
   }).join("");
+  populateCurrentPickOptions();
 }
+
+function populateCurrentPickOptions() {
+  const selectedId = state.currentPickId || "";
+  elements.currentPickSelect.innerHTML = '<option value="">Choose a recommendation…</option>' + state.books.map((book) =>
+    `<option value="${book.id}" ${book.id === selectedId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`
+  ).join("");
+  renderCurrentPick(state.books.find((book) => book.id === state.currentPickId));
+}
+
+let lastFocusedElement = null;
+function openBookDetail(book) {
+  lastFocusedElement = document.activeElement;
+  document.getElementById("bookDetailTitle").textContent = book.title;
+  document.getElementById("bookDetailAuthor").textContent = `by ${book.author}`;
+  document.getElementById("bookDetailWhy").textContent = book.why || "No note was added with this recommendation.";
+  document.getElementById("bookDetailMeta").textContent = `Recommended by ${book.name}${book.genre ? ` · ${book.genre}` : ""}`;
+  const image = document.getElementById("bookDetailCover");
+  const placeholder = document.getElementById("bookDetailPlaceholder");
+  image.hidden = !book.coverUrl;
+  placeholder.hidden = Boolean(book.coverUrl);
+  placeholder.textContent = book.title;
+  if (book.coverUrl) image.src = book.coverUrl;
+  elements.bookDetailModal.hidden = false;
+  elements.bookDetailModal.classList.add("active");
+  elements.bookDetailModal.querySelector("[data-action=close-book-detail]").focus();
+}
+
+function closeBookDetail() {
+  elements.bookDetailModal.classList.remove("active");
+  elements.bookDetailModal.hidden = true;
+  lastFocusedElement?.focus();
+}
+
+elements.bookDetailModal.addEventListener("click", (event) => {
+  if (event.target === elements.bookDetailModal) closeBookDetail();
+});
 
 elements.bookshelf.addEventListener("click", (event) => {
   const button = event.target.closest(".comment-toggle");
-  if (!button) return;
-  const section = button.parentElement.querySelector(".comments-section");
-  const isOpen = section.classList.toggle("active");
-  button.classList.toggle("open", isOpen);
-  button.setAttribute("aria-expanded", isOpen);
+  if (button) {
+    const section = button.parentElement.querySelector(".comments-section");
+    const isOpen = section.classList.toggle("active");
+    button.classList.toggle("open", isOpen);
+    button.setAttribute("aria-expanded", isOpen);
+    return;
+  }
+  if (event.target.closest("form, input, button")) return;
+  const card = event.target.closest(".book-card");
+  if (!card) return;
+  const book = state.books.find((entry) => entry.id === card.dataset.bookId);
+  if (book) openBookDetail(book);
+});
+elements.bookshelf.addEventListener("keydown", (event) => {
+  if (!event.target.matches(".book-card") || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  const book = state.books.find((entry) => entry.id === event.target.dataset.bookId);
+  if (book) openBookDetail(book);
 });
 elements.bookshelf.addEventListener("error", (event) => {
   if (!event.target.matches(".book-card-cover")) return;
