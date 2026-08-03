@@ -210,12 +210,21 @@
       <button type="button" class="modal-close-btn" data-action="close-book-detail" aria-label="Close book details">×</button>
       <img id="bookDetailCover" class="book-detail-cover" alt="" hidden>
       <div id="bookDetailPlaceholder" class="book-detail-cover-placeholder"></div>
-      <div class="book-detail-content">
-        <h3 id="bookDetailTitle"></h3>
-        <p id="bookDetailAuthor" class="author"></p>
-        <p id="bookDetailWhy"></p>
-        <p id="bookDetailMeta"></p>
-      </div>
+        <div class="book-detail-content">
+          <h3 id="bookDetailTitle"></h3>
+          <p id="bookDetailAuthor" class="author"></p>
+          <p id="bookDetailWhy"></p>
+          <p id="bookDetailMeta"></p>
+          <div class="book-detail-comments">
+            <h4>Club discussion</h4>
+            <div class="comment-list" id="bookDetailComments"></div>
+            <form class="comment-form" id="bookDetailCommentForm">
+              <input type="text" name="comment-name" placeholder="Your name" maxlength="60" required>
+              <input type="text" name="comment-text" placeholder="Add a comment…" maxlength="500" required>
+              <button type="submit">Post</button>
+            </form>
+          </div>
+        </div>
     </div>
   </div>
 

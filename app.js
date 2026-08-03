@@ -27,7 +27,7 @@ const limits = { name: 60, title: 160, author: 100, genre: 80, why: 800, comment
 
 // Add the Google email addresses of club officers before publishing.
 // Example: ["officer@example.edu", "librarian@example.edu"]
-const ADMIN_EMAILS = ["rizalded60@gmail.com"];
+const ADMIN_EMAILS = ["replace-with-officer-email@example.com"];
 
 const state = {
   uploadProvider: localStorage.getItem("uploadProvider") || "",
@@ -274,10 +274,6 @@ onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => {
   renderCurrentPick(state.books.find((book) => book.id === state.currentPickId));
 }, (error) => console.error("Current Pick settings error:", error));
 
-function expandedBookIds() {
-  return new Set([...elements.bookshelf.querySelectorAll(".comments-section.active")].map((section) => section.dataset.bookId));
-}
-
 function renderCommentList(comments) {
   if (!comments?.length) return '<div class="no-comments">No comments yet — be the first!</div>';
   return comments.map((comment) => `
@@ -288,42 +284,21 @@ function renderCommentList(comments) {
 }
 
 function renderBooks() {
-  const openBooks = expandedBookIds();
   if (!state.books.length) {
     elements.bookshelf.innerHTML = '<div class="empty-shelf">The shelf is waiting for its first books.<span class="sub">Be the first to add one below!</span></div>';
     populateCurrentPickOptions();
     return;
   }
-  elements.bookshelf.innerHTML = state.books.map((book) => {
-    const isOpen = openBooks.has(book.id);
-    const comments = book.comments || [];
-    return `
-      <div class="book-card" data-book-id="${book.id}" role="button" tabindex="0" aria-label="Open details for ${escapeHtml(book.title)}">
-        ${book.coverUrl
-          ? `<img class="book-card-cover" src="${escapeHtml(book.coverUrl)}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy">`
-          : `<div class="book-card-cover-placeholder">${escapeHtml(book.title)}</div>`}
-        <div class="book-card-body">
-          <div class="book-card-title">${escapeHtml(book.title)}</div>
-          <div class="book-card-author">by ${escapeHtml(book.author)}</div>
-          ${book.why ? `<div class="book-card-why">${escapeHtml(book.why)}</div>` : ""}
-          <div class="book-card-meta"><span class="book-card-recommender">${escapeHtml(book.name)}</span>${book.genre ? `<span class="book-card-genre">${escapeHtml(book.genre)}</span>` : ""}</div>
-          <button type="button" class="comment-toggle ${isOpen ? "open" : ""}" aria-expanded="${isOpen}" aria-controls="comments-${book.id}">
-            <span class="count">${comments.length} comment${comments.length === 1 ? "" : "s"}</span>
-            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <div class="comments-section ${isOpen ? "active" : ""}" id="comments-${book.id}" data-book-id="${book.id}">
-            <div class="comments-section-inner">
-              <div class="comment-list">${renderCommentList(comments)}</div>
-              <form class="comment-form" data-book-id="${book.id}">
-                <input type="text" name="comment-name" placeholder="Your name" maxlength="${limits.name}" required>
-                <input type="text" name="comment-text" placeholder="Add a comment…" maxlength="${limits.comment}" required>
-                <button type="submit">Post</button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>`;
-  }).join("");
+  elements.bookshelf.innerHTML = state.books.map((book) => `
+    <article class="book-card" data-book-id="${book.id}" role="button" tabindex="0" aria-label="Open details for ${escapeHtml(book.title)}">
+      ${book.coverUrl
+        ? `<img class="book-card-cover" src="${escapeHtml(book.coverUrl)}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy">`
+        : `<div class="book-card-cover-placeholder"><span>${escapeHtml(book.title)}</span></div>`}
+      <div class="book-card-overlay" aria-hidden="true">
+        <span>${escapeHtml(book.title)}</span>
+        <small>Open book</small>
+      </div>
+    </article>`).join("");
   populateCurrentPickOptions();
 }
 
@@ -342,6 +317,8 @@ function openBookDetail(book) {
   document.getElementById("bookDetailAuthor").textContent = `by ${book.author}`;
   document.getElementById("bookDetailWhy").textContent = book.why || "No note was added with this recommendation.";
   document.getElementById("bookDetailMeta").textContent = `Recommended by ${book.name}${book.genre ? ` · ${book.genre}` : ""}`;
+  document.getElementById("bookDetailComments").innerHTML = renderCommentList(book.comments || []);
+  document.getElementById("bookDetailCommentForm").dataset.bookId = book.id;
   const image = document.getElementById("bookDetailCover");
   const placeholder = document.getElementById("bookDetailPlaceholder");
   image.hidden = !book.coverUrl;
@@ -364,15 +341,6 @@ elements.bookDetailModal.addEventListener("click", (event) => {
 });
 
 elements.bookshelf.addEventListener("click", (event) => {
-  const button = event.target.closest(".comment-toggle");
-  if (button) {
-    const section = button.parentElement.querySelector(".comments-section");
-    const isOpen = section.classList.toggle("active");
-    button.classList.toggle("open", isOpen);
-    button.setAttribute("aria-expanded", isOpen);
-    return;
-  }
-  if (event.target.closest("form, input, button")) return;
   const card = event.target.closest(".book-card");
   if (!card) return;
   const book = state.books.find((entry) => entry.id === card.dataset.bookId);
@@ -391,8 +359,7 @@ elements.bookshelf.addEventListener("error", (event) => {
   placeholder.textContent = event.target.alt.replace(/^Cover of /, "");
   event.target.replaceWith(placeholder);
 }, true);
-elements.bookshelf.addEventListener("submit", async (event) => {
-  if (!event.target.matches(".comment-form")) return;
+async function postComment(event) {
   event.preventDefault();
   const form = event.target;
   const name = form.elements["comment-name"].value.trim();
@@ -411,6 +378,10 @@ elements.bookshelf.addEventListener("submit", async (event) => {
     button.disabled = false;
     button.textContent = "Post";
   }
+}
+
+elements.bookDetailModal.addEventListener("submit", (event) => {
+  if (event.target.matches(".comment-form")) postComment(event);
 });
 
 const connectionTimeout = setTimeout(() => {
@@ -421,6 +392,11 @@ onSnapshot(query(booksCollection, orderBy("date", "desc")), (snapshot) => {
   clearTimeout(connectionTimeout);
   state.books = snapshot.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
   renderBooks();
+  const openBookId = document.getElementById("bookDetailCommentForm").dataset.bookId;
+  const openBook = state.books.find((book) => book.id === openBookId);
+  if (!elements.bookDetailModal.hidden && openBook) {
+    document.getElementById("bookDetailComments").innerHTML = renderCommentList(openBook.comments || []);
+  }
 }, (error) => {
   clearTimeout(connectionTimeout);
   console.error("Firestore sync error:", error);
