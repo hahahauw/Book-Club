@@ -23,7 +23,7 @@ const auth = getAuth(app);
 const booksCollection = collection(db, "books");
 
 // Keep your existing officer email(s) here, in lowercase.
-const ADMIN_EMAILS = ["replace-with-officer-email@example.com"];
+const ADMIN_EMAILS = ["rizalded60@gmail.com"];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const BOOKS_PER_PAGE = 12;
 const limits = { name: 60, title: 160, author: 100, genre: 80, why: 800, comment: 500, board: 280 };
