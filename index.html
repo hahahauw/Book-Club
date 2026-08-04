@@ -1,60 +1,34 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Book Enthusiasts Club</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Caveat:wght@500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Enthusiasts Club</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Caveat:wght@500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-  <!-- Setup Modal -->
-  <div class="setup-modal" id="setupModal">
+  <div class="setup-modal" id="setupModal" hidden>
     <div class="setup-card">
       <button type="button" class="modal-close-btn" data-action="close-setup" aria-label="Close">×</button>
       <h3>Set up cover uploads</h3>
-      <p>Pick one free image host below — this only takes a couple minutes, and your keys stay on this device. Not ready yet? No problem — close this and covers will just show a placeholder until you set it up.</p>
-
+      <p>Choose one image host. Its settings stay only in this browser, so each club officer can use their own account.</p>
       <div class="provider-tabs">
         <button type="button" class="provider-tab active" data-provider="cloudinary">Cloudinary</button>
         <button type="button" class="provider-tab" data-provider="imgbb">ImgBB</button>
       </div>
-
       <div class="provider-panel active" id="panel-cloudinary">
-        <p>Best if you want room to grow — a generous free tier built for exactly this.</p>
-        <ol>
-          <li>Go to <a href="https://cloudinary.com" target="_blank" rel="noopener" style="color: var(--maroon);">cloudinary.com</a> and sign up (free, no card needed)</li>
-          <li>On your Dashboard, copy your <code>Cloud name</code></li>
-          <li>Go to Settings → Upload → Upload presets → Add upload preset</li>
-          <li>Name it <code>bookclub_unsigned</code> and set Signing Mode to <code>Unsigned</code></li>
-          <li>Paste your cloud name below</li>
-        </ol>
-        <div class="form-group">
-          <label>Cloudinary cloud name</label>
-          <input type="text" id="cloudNameInput" placeholder="e.g., mybookclub">
-        </div>
-        <button type="button" class="close-btn" data-action="save-cloudinary">Save & close</button>
+        <p>1. Create a free Cloudinary account. 2. Create an unsigned upload preset named <code>bookclub_unsigned</code>. 3. Paste your cloud name below.</p>
+        <div class="form-group"><label for="cloudNameInput">Cloudinary cloud name</label><input type="text" id="cloudNameInput" placeholder="e.g., mybookclub"></div>
+        <button type="button" class="close-btn" data-action="save-cloudinary">Save and close</button>
       </div>
-
       <div class="provider-panel" id="panel-imgbb">
-        <p>Fastest to set up — one API key, no preset configuration.</p>
-        <ol>
-          <li>Go to <a href="https://api.imgbb.com" target="_blank" rel="noopener" style="color: var(--maroon);">api.imgbb.com</a> and sign up (free)</li>
-          <li>Copy the API key it gives you</li>
-          <li>Paste it below</li>
-        </ol>
-        <div class="form-group">
-          <label>ImgBB API key</label>
-          <input type="text" id="imgbbKeyInput" placeholder="Paste your API key">
-        </div>
-        <button type="button" class="close-btn" data-action="save-imgbb">Save & close</button>
+        <p>1. Create a free ImgBB account. 2. Copy its API key. 3. Paste it below.</p>
+        <div class="form-group"><label for="imgbbKeyInput">ImgBB API key</label><input type="text" id="imgbbKeyInput" placeholder="Paste your API key"></div>
+        <button type="button" class="close-btn" data-action="save-imgbb">Save and close</button>
       </div>
-
-      <p class="note">Your credentials are stored only in this browser's local storage — never sent anywhere but the image host you chose. You can change or clear them anytime from the ⚙ button.</p>
       <button type="button" class="maybe-later-btn" data-action="close-setup">Maybe later</button>
     </div>
   </div>
@@ -63,171 +37,90 @@
     <header>
       <div class="catalog-label">est. 2026 ✿ pull up a chair</div>
       <h1>Book Enthusiasts Club</h1>
-      <p class="tagline">"A room without books is like a body without a soul." — Cicero (But it's not that serious gng dw)</p>
+      <p class="tagline">“A room without books is like a body without a soul.” — Cicero</p>
+      <div class="member-bar">
+        <span id="memberGreeting">Reading as a guest</span>
+        <button type="button" class="setup-link-btn" data-action="member-sign-in" id="memberSignIn">Member sign in</button>
+        <button type="button" class="text-link-btn" data-action="show-profile" id="memberProfile" hidden>My shelf</button>
+        <button type="button" class="text-link-btn" data-action="sign-out" id="memberSignOut" hidden>Sign out</button>
+      </div>
     </header>
 
-    <!-- Current Book -->
     <section class="reveal" style="--tilt: -1deg;">
-      <div class="section-head">
-        <span class="section-num">01</span>
-        <h2>What We're Reading</h2>
-        <span class="section-rule"></span>
-      </div>
+      <div class="section-head"><span class="section-num">01</span><h2>What We're Reading</h2><span class="section-rule"></span></div>
       <div class="card due-card">
         <div class="due-card-inner">
-            <img class="book-cover-img" id="currentPickCover" alt="Cover of the current pick" hidden>
-            <div class="book-cover-placeholder" id="currentPickPlaceholder">
-              <span>Your First<br>Book Here</span>
-            </div>
-            <div class="book-info">
-              <p class="section-kicker">Club feature</p>
-              <h3 id="currentPickTitle">The Current Pick</h3>
-              <p class="author" id="currentPickAuthor">Choose a book from the shelf</p>
-              <p class="desc" id="currentPickDescription">When your officers select a member recommendation, it will become the club’s Current Pick right here.</p>
-              <span class="due-stamp"><span class="dot"></span> <span id="currentPickMeta">Waiting for the next read</span></span>
-              <div class="officer-controls">
-                <button type="button" data-action="sign-in" class="setup-link-btn" id="officerSignIn">Officer sign in</button>
-                <div id="officerPicker" hidden>
-                  <label for="currentPickSelect">Choose from the shelf</label>
-                  <div class="officer-picker-row">
-                    <select id="currentPickSelect"></select>
-                    <button type="button" data-action="save-current-pick" class="setup-link-btn">Feature this book</button>
-                    <button type="button" data-action="sign-out" class="text-link-btn">Sign out</button>
-                  </div>
-                </div>
-                <p class="officer-status" id="officerStatus" aria-live="polite"></p>
+          <img class="book-cover-img" id="currentPickCover" alt="Cover of the current pick" hidden>
+          <div class="book-cover-placeholder" id="currentPickPlaceholder"><span>Your First<br>Book Here</span></div>
+          <div class="book-info">
+            <p class="section-kicker">Club feature</p>
+            <h3 id="currentPickTitle">The Current Pick</h3>
+            <p class="author" id="currentPickAuthor">Choose a book from the shelf</p>
+            <p class="desc" id="currentPickDescription">When your officers select a member recommendation, it will become the club’s Current Pick right here.</p>
+            <span class="due-stamp"><span class="dot"></span> <span id="currentPickMeta">Waiting for the next read</span></span>
+            <div class="officer-controls">
+              <div id="officerPicker" hidden>
+                <label for="currentPickSelect">Choose from the shelf</label>
+                <div class="officer-picker-row"><select id="currentPickSelect"></select><button type="button" data-action="save-current-pick" class="setup-link-btn">Feature this book</button></div>
               </div>
-          </div>
-        </div>
-        <div class="due-card-edge"></div>
-      </div>
-    </section>
-
-    <!-- Member Bookshelf -->
-    <section class="reveal" style="--tilt: 0.8deg;">
-      <div class="section-head">
-        <span class="section-num">02</span>
-        <h2>The Member Bookshelf</h2>
-        <span class="section-rule"></span>
-      </div>
-        <p class="section-sub">Books recommended by our members. Select a card to bring a book into focus; tap the comment count to join the discussion.</p>
-      <div class="card">
-        <div class="bookshelf" id="bookshelf">
-          <div class="empty-shelf">
-            Loading the shelf...
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Recommendation Form -->
-    <section class="reveal" style="--tilt: -0.6deg;">
-      <div class="section-head">
-        <span class="section-num">03</span>
-        <h2>Share a Favorite</h2>
-        <span class="section-rule"></span>
-      </div>
-      <div class="card">
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
-          <button type="button" data-action="show-setup" class="setup-link-btn">⚙ Set up cover uploads</button>
-        </div>
-        <div class="success-msg" id="successMsg">
-          Thanks! Your recommendation has been added to the shelf.
-        </div>
-        <form id="recForm">
-          <div class="form-group">
-            <label for="name">What should we call you?</label>
-            <input type="text" id="name" name="name" placeholder="e.g., Jamie" maxlength="60" required>
-          </div>
-
-          <div class="form-group">
-            <label for="bookTitle">Book title</label>
-            <input type="text" id="bookTitle" name="bookTitle" placeholder="e.g., The House in the Cerulean Sea" maxlength="160" required>
-          </div>
-
-          <div class="form-group">
-            <label for="author">Author</label>
-            <input type="text" id="author" name="author" placeholder="e.g., TJ Klune" maxlength="100" required>
-          </div>
-
-          <div class="form-group">
-            <label for="genre">Genre (optional)</label>
-            <input type="text" id="genre" name="genre" placeholder="e.g., Fantasy, Contemporary, Poetry..." maxlength="80">
-          </div>
-
-          <div class="form-group">
-            <label>Book cover</label>
-            <div class="upload-area" id="uploadArea">
-              <input type="file" id="coverUpload" accept="image/*">
-              <div class="upload-text">
-                <div class="icon">＋</div>
-                <div>Drag & drop a cover image here</div>
-                <div style="font-size: 0.82rem; margin-top: 4px;">or click to browse</div>
-              </div>
-              <img class="upload-preview" id="uploadPreview" alt="Preview">
-              <div class="upload-status" id="uploadStatus"></div>
+              <p class="officer-status" id="officerStatus" aria-live="polite"></p>
             </div>
-            <p class="hint">No image? We'll show a cozy placeholder instead. No pressure.</p>
           </div>
-
-          <div class="form-group">
-            <label for="why">Why do you like it? (a sentence is plenty)</label>
-            <textarea id="why" name="why" placeholder="It made me feel like I was wrapped in a warm blanket on a rainy day..." maxlength="800"></textarea>
-            <p class="hint">This shows up on the bookshelf. Keep it cozy.</p>
-          </div>
-
-          <button type="submit">Add to the shelf</button>
-        </form>
+        </div><div class="due-card-edge"></div>
       </div>
     </section>
 
-    <!-- About -->
-    <section class="reveal" style="--tilt: 0.5deg;">
-      <div class="section-head">
-        <span class="section-num">04</span>
-        <h2>About the Club</h2>
-        <span class="section-rule"></span>
-      </div>
-      <div class="card">
-        <p style="margin-bottom: 16px;">We're a group of readers who meet every other Thursday. No pressure, no required reading speed, no judgment if you haven't finished a book yet.</p>
-        <p style="margin-bottom: 16px;">This year, we're trying something new: actually getting to know each other through the stories we love.</p>
-        <p style="color: var(--ink-soft); font-size: 0.94rem;">
-          Location: [School Library (HS)]<br>
-          Schedule: Every other Thursday<br>
-          Chat: [uh.. Messenger?]
-        </p>
-      </div>
+    <section class="reveal" style="--tilt: .8deg;">
+      <div class="section-head"><span class="section-num">02</span><h2>The Member Bookshelf</h2><span class="section-rule"></span></div>
+      <p class="section-sub">Cover-first browsing—select a book to read its recommendation and join the discussion.</p>
+      <div class="card"><div class="bookshelf" id="bookshelf"><div class="empty-shelf">Loading the shelf…</div></div><button type="button" class="load-more-btn" id="loadMoreBooks" hidden>Show more books</button></div>
     </section>
 
-    <footer>
-      <p>Made with <span class="heart">♥</span> by the Book Enthusiasts Club</p>
-      <p class="est">Est. 2026</p>
-    </footer>
+    <section class="reveal" style="--tilt: -.6deg;">
+      <div class="section-head"><span class="section-num">03</span><h2>Share a Favorite</h2><span class="section-rule"></span></div>
+      <div class="card suggestion-card"><p>Have a book the club should know about? Add it to the shelf—or send it to the officers for review.</p><button type="button" data-action="open-suggestion" class="suggest-book-btn">✦ Suggest a Book</button><p class="hint">Members publish immediately. Guest suggestions are reviewed first.</p></div>
+    </section>
+
+    <section class="reveal" style="--tilt: .4deg;">
+      <div class="section-head"><span class="section-num">04</span><h2>Announcements</h2><span class="section-rule"></span></div>
+      <div class="card announcement-card"><p id="announcementText">No announcements yet—check back soon.</p><div id="announcementEditor" class="officer-editor" hidden><label for="announcementInput">Officer update</label><textarea id="announcementInput" maxlength="600" placeholder="Share a meeting reminder or club update…"></textarea><button type="button" data-action="save-announcement" class="setup-link-btn">Save announcement</button></div></div>
+    </section>
+
+    <section class="reveal" style="--tilt: -.5deg;">
+      <div class="section-head"><span class="section-num">05</span><h2>The Pin Board</h2><span class="section-rule"></span></div>
+      <div class="card"><p class="section-sub">A small place for quotes, reactions, and reading thoughts.</p><form id="boardForm" class="board-form"><textarea id="boardText" maxlength="280" placeholder="Leave a note for the club…" required></textarea><button type="submit">Pin note</button></form><p id="boardStatus" class="hint"></p><div class="pin-board" id="pinBoard"><div class="no-comments">Loading notes…</div></div></div>
+    </section>
+
+    <section class="reveal" style="--tilt: .5deg;">
+      <div class="section-head"><span class="section-num">06</span><h2>About the Club</h2><span class="section-rule"></span></div>
+      <div class="card"><p style="margin-bottom: 16px;">We're a group of readers who meet every other Thursday. No pressure, no required reading speed, no judgment if you haven't finished a book yet.</p><p style="color: var(--ink-soft); font-size: .94rem;">Location: [School Library (HS)]<br>Schedule: Every other Thursday<br>Chat: [Messenger]</p></div>
+    </section>
+    <footer><p>Made with <span class="heart">♥</span> by the Book Enthusiasts Club</p><p class="est">Est. 2026</p></footer>
   </div>
 
-  <div class="setup-modal" id="bookDetailModal" role="dialog" aria-modal="true" aria-labelledby="bookDetailTitle" hidden>
-    <div class="setup-card book-detail-card">
-      <button type="button" class="modal-close-btn" data-action="close-book-detail" aria-label="Close book details">×</button>
-      <img id="bookDetailCover" class="book-detail-cover" alt="" hidden>
-      <div id="bookDetailPlaceholder" class="book-detail-cover-placeholder"></div>
-        <div class="book-detail-content">
-          <h3 id="bookDetailTitle"></h3>
-          <p id="bookDetailAuthor" class="author"></p>
-          <p id="bookDetailWhy"></p>
-          <p id="bookDetailMeta"></p>
-          <div class="book-detail-comments">
-            <h4>Club discussion</h4>
-            <div class="comment-list" id="bookDetailComments"></div>
-            <form class="comment-form" id="bookDetailCommentForm">
-              <input type="text" name="comment-name" placeholder="Your name" maxlength="60" required>
-              <input type="text" name="comment-text" placeholder="Add a comment…" maxlength="500" required>
-              <button type="submit">Post</button>
-            </form>
-          </div>
-        </div>
+  <div class="setup-modal" id="suggestionModal" role="dialog" aria-modal="true" aria-labelledby="suggestionTitle" hidden>
+    <div class="setup-card suggestion-modal-card"><button type="button" class="modal-close-btn" data-action="close-suggestion" aria-label="Close">×</button><h3 id="suggestionTitle">Suggest a book</h3><div class="success-msg" id="successMsg"></div>
+      <div class="suggestion-modal-tools"><button type="button" data-action="show-setup" class="setup-link-btn">⚙ Set up cover uploads</button></div>
+      <form id="recForm">
+        <div class="form-group"><label for="name">What should we call you?</label><input type="text" id="name" name="name" maxlength="60" required></div>
+        <div class="form-group"><label for="bookTitle">Book title</label><input type="text" id="bookTitle" name="bookTitle" maxlength="160" required></div>
+        <div class="form-group"><label for="author">Author</label><input type="text" id="author" name="author" maxlength="100" required></div>
+        <div class="form-group"><label for="genre">Genre (optional)</label><input type="text" id="genre" name="genre" maxlength="80"></div>
+        <div class="form-group"><label>Book cover</label><div class="upload-area" id="uploadArea"><input type="file" id="coverUpload" accept="image/*"><div class="upload-text"><div class="icon">＋</div><div>Drop a cover here or click to browse</div></div><img class="upload-preview" id="uploadPreview" alt="Cover preview"><div class="upload-status" id="uploadStatus"></div></div></div>
+        <div class="form-group"><label for="why">Why do you like it?</label><textarea id="why" name="why" maxlength="800"></textarea></div>
+        <button type="submit">Send suggestion</button>
+      </form>
     </div>
   </div>
 
+  <div class="setup-modal" id="bookDetailModal" role="dialog" aria-modal="true" aria-labelledby="bookDetailTitle" hidden>
+    <div class="setup-card book-detail-card"><button type="button" class="modal-close-btn" data-action="close-book-detail" aria-label="Close book details">×</button><img id="bookDetailCover" class="book-detail-cover" alt="" hidden><div id="bookDetailPlaceholder" class="book-detail-cover-placeholder"></div><div class="book-detail-content"><button type="button" class="profile-link" id="bookDetailProfile"></button><h3 id="bookDetailTitle"></h3><p id="bookDetailAuthor" class="author"></p><p id="bookDetailWhy"></p><p id="bookDetailMeta"></p><div class="book-detail-comments"><h4>Club discussion</h4><div class="comment-list" id="bookDetailComments"></div><form class="comment-form" id="bookDetailCommentForm"><input type="text" name="comment-name" placeholder="Your name" maxlength="60" required><input type="text" name="comment-text" placeholder="Add a comment…" maxlength="500" required><button type="submit">Post</button></form></div></div></div>
+  </div>
+
+  <div class="setup-modal" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileName" hidden><div class="setup-card profile-card"><button type="button" class="modal-close-btn" data-action="close-profile" aria-label="Close profile">×</button><img id="profilePhoto" class="profile-photo" alt="" hidden><div id="profileInitial" class="profile-initial"></div><h3 id="profileName"></h3><p id="profileJoined" class="hint"></p><div class="profile-edit" id="profileEdit" hidden><label for="profileNameInput">Display name</label><input id="profileNameInput" maxlength="60"><button type="button" data-action="save-profile" class="setup-link-btn">Save profile</button></div><h4>Their shelf</h4><div class="profile-books" id="profileBooks"></div></div></div>
+
+  <div class="setup-modal" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle" hidden><div class="setup-card review-card"><button type="button" class="modal-close-btn" data-action="close-review" aria-label="Close review queue">×</button><h3 id="reviewTitle">Suggestion review</h3><div id="pendingList"></div></div></div>
+  <button type="button" class="review-fab" id="reviewButton" data-action="open-review" hidden>Review suggestions</button>
   <script type="module" src="app.js"></script>
 </body>
 </html>
