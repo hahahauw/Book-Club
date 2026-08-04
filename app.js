@@ -319,6 +319,7 @@ onSnapshot(query(collection(db, "boardPosts"), orderBy("date", "desc")), (snapsh
 // ====== EVENTS ======
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action]"); const action = target?.dataset.action;
+  if (action === "browse-members") document.getElementById("memberDirectorySection")?.scrollIntoView({ behavior: "smooth", block: "start" });
   if (action === "member-sign-in") signInMember(); if (action === "sign-out") signOut(auth);
   if (action === "show-setup") showSetup(); if (action === "close-setup") closeSetup(); if (action === "save-cloudinary") saveUploadProvider("cloudinary"); if (action === "save-imgbb") saveUploadProvider("imgbb");
   if (action === "open-suggestion") showModal(elements.suggestionModal); if (action === "close-suggestion") closeModal(elements.suggestionModal);
