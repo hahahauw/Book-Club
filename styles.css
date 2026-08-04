@@ -1002,6 +1002,11 @@
   .pin-note p { font-family: 'Caveat', cursive; font-size: 1.16rem; line-height: 1.25; }
   .pin-note span { position: absolute; bottom: 10px; left: 14px; right: 14px; font-size: .68rem; color: var(--ink-soft); }
   .profile-card { max-width: 520px; text-align: center; }
+  .profile-card { --profile-accent: var(--coral); text-align: left; max-width: 720px; border-top: 8px solid var(--profile-accent); }
+  .profile-hero { display: grid; grid-template-columns: 78px 1fr; gap: 16px; align-items: center; padding: 4px 12px 18px 0; border-bottom: 2px dashed var(--line-strong); }
+  .profile-hero .profile-photo, .profile-hero .profile-initial { margin: 0; }
+  .profile-label { color: var(--profile-accent); font: 700 .8rem 'Space Grotesk', sans-serif; letter-spacing: .12em; }
+  .profile-hero h3 { color: var(--ink); margin: 2px 0; }
   .profile-photo, .profile-initial { width: 78px; height: 78px; margin: 4px auto 10px; object-fit: cover; }
   .profile-initial { font-size: 1.45rem; background: var(--coral); }
   .profile-card h4 { margin-top: 24px; color: var(--teal-deep); }
@@ -1010,6 +1015,32 @@
   .profile-edit input { margin-bottom: 8px; }
   .profile-books { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
   .profile-book { padding: 7px 10px; font-size: .78rem; background: var(--highlight); color: var(--ink); }
+  .profile-shelf-head { display: flex; justify-content: space-between; align-items: end; margin-top: 25px; }
+  .profile-shelf-head h4 { margin: 0; color: var(--ink); font-size: 1.3rem; }
+  .shelf-count { color: var(--ink-soft); font-size: .78rem; }
+  .profile-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 12px; }
+  .personal-book { position: relative; overflow: hidden; border: 2px solid var(--ink); background: var(--paper); border-radius: 8px; box-shadow: 3px 4px 0 rgba(var(--shadow-color), .12); }
+  .personal-book > img, .personal-book-placeholder { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: var(--profile-accent); color: var(--card); }
+  .personal-book-placeholder { display: grid; place-items: center; padding: 10px; font-family: 'Fredoka', sans-serif; text-align: center; }
+  .personal-book > div { padding: 9px; }
+  .personal-book strong, .personal-book span, .personal-book small { display: block; }
+  .personal-book strong { color: var(--profile-accent); line-height: 1.15; font-size: .86rem; }
+  .personal-book span { font-size: .72rem; color: var(--ink-soft); margin-top: 2px; }
+  .personal-book small { display: inline-block; margin-top: 6px; padding: 2px 5px; background: var(--highlight); color: var(--ink); font-size: .62rem; text-transform: uppercase; }
+  .personal-book p { margin-top: 7px; font: 1rem/1.1 'Caveat', cursive; }
+  .remove-shelf-book { position: absolute; top: 4px; right: 4px; width: 23px; height: 23px; padding: 0; border-radius: 50%; background: var(--coral-deep); font-size: 1rem; }
+  .personal-shelf-form { margin-top: 22px; padding: 15px; background: color-mix(in srgb, var(--profile-accent) 12%, var(--card)); border: 2px dashed var(--profile-accent); border-radius: 10px; }
+  .personal-shelf-form h4 { margin: 0 0 10px; color: var(--profile-accent); }
+  .personal-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .personal-fields input, .personal-fields select, .personal-shelf-form textarea { min-width: 0; }
+  .personal-shelf-form textarea { min-height: 70px; margin: 9px 0; }
+  .member-directory { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 14px; }
+  .member-card { display: grid; place-items: center; gap: 4px; min-height: 150px; padding: 14px 8px; background: var(--card); color: var(--ink); border: 2px solid var(--member-accent); box-shadow: 3px 4px 0 color-mix(in srgb, var(--member-accent) 35%, transparent); }
+  .member-card:hover { background: color-mix(in srgb, var(--member-accent) 10%, var(--card)); transform: translateY(-4px) rotate(-1deg); }
+  .member-card img, .member-card-initial { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; border: 2px solid var(--ink); }
+  .member-card-initial { display: grid; place-items: center; background: var(--member-accent); color: var(--card); font: 700 1rem 'Fredoka', sans-serif; }
+  .member-card-name { font: 600 .86rem 'Fredoka', sans-serif; text-align: center; }
+  .member-card small { color: var(--ink-soft); font-size: .67rem; }
   .review-fab { position: fixed; right: 18px; bottom: 38px; z-index: 8; padding: 10px 14px; font-size: .78rem; background: var(--teal); }
   .review-card { max-width: 650px; max-height: 82vh; overflow: auto; }
   .pending-book { padding: 14px 0; border-bottom: 2px dashed var(--line-strong); }
@@ -1042,5 +1073,5 @@
   .member-row strong, .member-row small { display: block; }
   .member-row small { color: var(--ink-soft); margin-top: 1px; }
   .member-row button { padding: 6px 8px; font-size: .7rem; }
-  @media (max-width: 600px) { .officer-sidebar { width: 100%; border-left: 0; transform: translateY(105%); } .officer-sidebar.active { transform: translateY(0); } .officer-tools-trigger { bottom: 18px; } }
+  @media (max-width: 600px) { .officer-sidebar { width: 100%; border-left: 0; transform: translateY(105%); } .officer-sidebar.active { transform: translateY(0); } .officer-tools-trigger { bottom: 18px; } .profile-hero { grid-template-columns: 58px 1fr; } .profile-hero .profile-photo, .profile-hero .profile-initial { width: 58px; height: 58px; } .personal-fields { grid-template-columns: 1fr; } }
   @media (max-width: 600px) { .board-form { flex-direction: column; align-items: stretch; } .review-fab { bottom: 18px; } header::before, header::after { display: none; } }

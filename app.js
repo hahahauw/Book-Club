@@ -43,8 +43,10 @@ const state = {
   unsubscribeMemberManagement: null,
   members: [],
   invitedEmails: [],
-  memberPrivate: []
-  ,unsubscribeOwnMember: null
+  memberPrivate: [],
+  unsubscribeOwnMember: null,
+  profileShelfEntries: [],
+  unsubscribeProfileShelf: null
 };
 
 const elements = {
@@ -67,12 +69,14 @@ const elements = {
   officerToolsButton: document.getElementById("officerToolsButton"), officerSidebar: document.getElementById("officerSidebar"),
   inviteForm: document.getElementById("inviteForm"), inviteEmail: document.getElementById("inviteEmail"), inviteStatus: document.getElementById("inviteStatus"),
   invitedList: document.getElementById("invitedList"), memberList: document.getElementById("memberList"),
-  pendingList: document.getElementById("pendingList")
+  pendingList: document.getElementById("pendingList"), memberDirectory: document.getElementById("memberDirectory"),
+  personalShelfForm: document.getElementById("personalShelfForm")
 };
 
 function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value || ""); return node.innerHTML; }
 function initials(name) { return String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); }
 function formatDate(value) { const date = new Date(value); return Number.isNaN(date.valueOf()) ? "Just now" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+function safeColor(value) { return /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#e8623d"; }
 function isOfficer() { return state.member?.role === "officer"; }
 function isMember() { return Boolean(state.user && state.member && ["member", "officer"].includes(state.member.role)); }
 
@@ -185,7 +189,45 @@ async function openProfile(memberId) {
   const snapshot = await getDoc(doc(db, "members", memberId));
   if (!snapshot.exists()) return showMessage("This member profile is not available yet.", "error");
   const member = snapshot.data(); const own = state.user?.uid === memberId;
-  const photo = document.getElementById("profilePhoto"), initial = document.getElementById("profileInitial"), bio = document.getElementById("profileBio"); photo.hidden = !member.photoURL; initial.hidden = Boolean(member.photoURL); if (member.photoURL) photo.src = member.photoURL; initial.textContent = initials(member.displayName); initial.style.background = member.themeColor || "var(--coral)"; document.getElementById("profileName").textContent = member.displayName; bio.textContent = member.bio || ""; bio.hidden = !member.bio; document.getElementById("profileJoined").textContent = `Member since ${formatDate(member.joinedAt)}`; const ownBooks = state.books.filter((book) => book.memberId === memberId); document.getElementById("profileBooks").innerHTML = ownBooks.length ? ownBooks.map((book) => `<button type="button" data-book-id="${book.id}" class="profile-book">${escapeHtml(book.title)}</button>`).join("") : '<p class="hint">No shelf additions yet.</p>'; const edit = document.getElementById("profileEdit"); edit.hidden = !own; if (own) { document.getElementById("profileNameInput").value = member.displayName; document.getElementById("profileBioInput").value = member.bio || ""; document.getElementById("profileColorInput").value = /^#[0-9a-f]{6}$/i.test(member.themeColor || "") ? member.themeColor : "#e8623d"; renderProfileSwatches(member.themeColor || "#e8623d"); } elements.profileModal.dataset.memberId = memberId; showModal(elements.profileModal);
+  const accent = /^#[0-9a-f]{6}$/i.test(member.themeColor || "") ? member.themeColor : "#e8623d";
+  const photo = document.getElementById("profilePhoto"), initial = document.getElementById("profileInitial"), bio = document.getElementById("profileBio");
+  elements.profileModal.style.setProperty("--profile-accent", accent);
+  photo.hidden = !member.photoURL; initial.hidden = Boolean(member.photoURL); if (member.photoURL) photo.src = member.photoURL;
+  initial.textContent = initials(member.displayName); initial.style.background = accent; document.getElementById("profileName").textContent = member.displayName;
+  bio.textContent = member.bio || ""; bio.hidden = !member.bio; document.getElementById("profileJoined").textContent = `Member since ${formatDate(member.joinedAt)}`;
+  const edit = document.getElementById("profileEdit"); edit.hidden = !own; elements.personalShelfForm.hidden = !own;
+  if (own) { document.getElementById("profileNameInput").value = member.displayName; document.getElementById("profileBioInput").value = member.bio || ""; document.getElementById("profileColorInput").value = accent; renderProfileSwatches(accent); }
+  elements.profileModal.dataset.memberId = memberId; document.getElementById("profileShelfTitle").textContent = own ? "My shelf" : `${member.displayName}'s shelf`;
+  subscribeProfileShelf(memberId); showModal(elements.profileModal);
+}
+
+function renderProfileShelf() {
+  const entries = state.profileShelfEntries;
+  document.getElementById("profileShelfCount").textContent = entries.length ? `${entries.length} book${entries.length === 1 ? "" : "s"}` : "";
+  document.getElementById("profileBooks").innerHTML = entries.length ? entries.map((entry) => `
+    <article class="personal-book">
+      ${entry.coverUrl ? `<img src="${escapeHtml(entry.coverUrl)}" alt="Cover of ${escapeHtml(entry.title)}">` : `<div class="personal-book-placeholder">${escapeHtml(entry.title)}</div>`}
+      <div><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(entry.author)}</span><small>${escapeHtml(entry.status.replace(/-/g, " "))}</small>${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ""}</div>
+      ${state.user?.uid === elements.profileModal.dataset.memberId ? `<button type="button" class="remove-shelf-book" data-action="remove-shelf-book" data-entry-id="${entry.id}" aria-label="Remove ${escapeHtml(entry.title)}">×</button>` : ""}
+    </article>`).join("") : '<p class="hint">This shelf is waiting for its first book.</p>';
+}
+
+function subscribeProfileShelf(memberId) {
+  state.unsubscribeProfileShelf?.();
+  state.profileShelfEntries = [];
+  renderProfileShelf();
+  state.unsubscribeProfileShelf = onSnapshot(query(collection(db, "memberShelves", memberId, "entries"), orderBy("date", "desc")), (snapshot) => { state.profileShelfEntries = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderProfileShelf(); }, (error) => { console.error("Personal shelf error:", error); document.getElementById("profileBooks").innerHTML = '<p class="hint">This shelf is unavailable right now.</p>'; });
+}
+
+async function addPersonalShelfEntry(event) {
+  event.preventDefault();
+  if (!isMember() || state.user?.uid !== elements.profileModal.dataset.memberId) return;
+  const form = event.target; const title = form.elements["shelf-title"].value.trim(); const author = form.elements["shelf-author"].value.trim();
+  if (!title || !author) return;
+  const button = form.querySelector("button"); button.disabled = true;
+  try { await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), { title, author, coverUrl: form.elements["shelf-cover"].value.trim(), status: form.elements["shelf-status"].value, note: form.elements["shelf-note"].value.trim(), date: new Date().toISOString() }); form.reset(); }
+  catch (error) { console.error(error); showMessage("Could not add that book to your shelf.", "error"); }
+  finally { button.disabled = false; }
 }
 async function postComment(event) { event.preventDefault(); const form = event.target; const name = form.elements["comment-name"].value.trim(); const text = form.elements["comment-text"].value.trim(); if (!name || !text) return; const button = form.querySelector("button[type=submit]"); button.disabled = true; try { await updateDoc(doc(db, "books", form.dataset.bookId), { comments: arrayUnion({ name, text, date: new Date().toISOString() }) }); form.reset(); } catch (error) { console.error(error); showMessage("Could not post your comment — check your connection and try again.", "error"); } finally { button.disabled = false; } }
 
@@ -219,7 +261,6 @@ function subscribeMemberManagement() {
   renderMemberManagement();
   if (!isOfficer()) return;
   const unsubscribers = [
-    onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberManagement(); }),
     onSnapshot(collection(db, "allowedEmails"), (snapshot) => { state.invitedEmails = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberManagement(); }),
     onSnapshot(collection(db, "memberPrivate"), (snapshot) => { state.memberPrivate = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberManagement(); })
   ];
@@ -231,6 +272,15 @@ function renderMemberManagement() {
   const pendingInvites = state.invitedEmails.filter((invite) => !joinedEmails.has(String(invite.id).toLowerCase()));
   elements.invitedList.innerHTML = pendingInvites.length ? pendingInvites.map((invite) => `<div class="member-row"><span>${escapeHtml(invite.id)}</span></div>`).join("") : '<p class="hint">No waiting invitations.</p>';
   elements.memberList.innerHTML = state.members.length ? state.members.map((member) => `<div class="member-row"><span><strong>${escapeHtml(member.displayName)}</strong><small>${escapeHtml(member.role)}</small></span><button type="button" data-action="toggle-role" data-uid="${member.id}">${member.role === "officer" ? "Make member" : "Make officer"}</button></div>`).join("") : '<p class="hint">No members have joined yet.</p>';
+}
+
+function renderMemberDirectory() {
+  elements.memberDirectory.innerHTML = state.members.length ? state.members.map((member) => `
+    <button type="button" class="member-card" data-profile-id="${member.id}" style="--member-accent:${safeColor(member.themeColor)}">
+      ${member.photoURL ? `<img src="${escapeHtml(member.photoURL)}" alt="${escapeHtml(member.displayName)}">` : `<span class="member-card-initial">${escapeHtml(initials(member.displayName))}</span>`}
+      <span class="member-card-name">${escapeHtml(member.displayName)}</span>
+      <small>${member.role === "officer" ? "Officer" : "Member"}</small>
+    </button>`).join("") : '<div class="no-comments">Member profiles will appear here soon.</div>';
 }
 
 async function addInvite(event) {
@@ -260,6 +310,7 @@ function renderBoard(posts) { elements.pinBoard.innerHTML = posts.length ? posts
 async function postBoard(event) { event.preventDefault(); const text = elements.boardText.value.trim(); if (!isMember()) { elements.boardStatus.textContent = "Sign in as a member to pin a note."; return; } if (!text) return; const button = elements.boardForm.querySelector("button"); button.disabled = true; try { await addDoc(collection(db, "boardPosts"), { text, memberId: state.user.uid, displayName: state.member.displayName, photoURL: state.member.photoURL || "", date: new Date().toISOString() }); elements.boardText.value = ""; elements.boardStatus.textContent = "Pinned!"; } catch (error) { console.error(error); elements.boardStatus.textContent = "Could not pin that note."; } finally { button.disabled = false; } }
 
 // ====== REALTIME LISTENERS ======
+onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberDirectory(); renderMemberManagement(); }, (error) => { console.error("Member directory error:", error); elements.memberDirectory.innerHTML = '<div class="no-comments">Member profiles are unavailable right now.</div>'; });
 onSnapshot(query(booksCollection, orderBy("date", "desc")), (snapshot) => { state.books = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderBooks(); }, (error) => { console.error(error); elements.bookshelf.innerHTML = '<div class="empty-shelf">Couldn’t load the shelf right now.</div>'; });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { state.currentPickId = snapshot.data()?.bookId || null; renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; elements.announcementText.textContent = state.announcement || "No announcements yet—check back soon."; if (isOfficer()) elements.announcementInput.value = state.announcement; });
@@ -271,17 +322,19 @@ document.addEventListener("click", (event) => {
   if (action === "member-sign-in") signInMember(); if (action === "sign-out") signOut(auth);
   if (action === "show-setup") showSetup(); if (action === "close-setup") closeSetup(); if (action === "save-cloudinary") saveUploadProvider("cloudinary"); if (action === "save-imgbb") saveUploadProvider("imgbb");
   if (action === "open-suggestion") showModal(elements.suggestionModal); if (action === "close-suggestion") closeModal(elements.suggestionModal);
-  if (action === "close-book-detail") closeModal(elements.bookDetailModal); if (action === "close-profile") closeModal(elements.profileModal); if (action === "close-review") closeModal(elements.reviewModal);
+  if (action === "close-book-detail") closeModal(elements.bookDetailModal); if (action === "close-profile") { closeModal(elements.profileModal); state.unsubscribeProfileShelf?.(); state.unsubscribeProfileShelf = null; } if (action === "close-review") closeModal(elements.reviewModal);
   if (action === "save-current-pick") { if (isOfficer() && elements.currentPickSelect.value) setDoc(doc(db, "siteSettings", "currentPick"), { bookId: elements.currentPickSelect.value, updatedAt: new Date().toISOString() }); }
   if (action === "save-announcement") saveAnnouncement(); if (action === "open-review" && isOfficer()) showModal(elements.reviewModal);
   if (action === "open-officer-tools" && isOfficer()) showModal(elements.officerSidebar); if (action === "close-officer-tools") closeModal(elements.officerSidebar);
   if (action === "approve-pending") reviewPending(target.dataset.id, true); if (action === "reject-pending") reviewPending(target.dataset.id, false);
   if (action === "toggle-role") toggleMemberRole(target.dataset.uid);
+  if (action === "remove-shelf-book" && state.user?.uid === elements.profileModal.dataset.memberId) deleteDoc(doc(db, "memberShelves", state.user.uid, "entries", target.dataset.entryId));
   if (action === "show-profile") openProfile(state.user?.uid); const detailProfile = event.target.closest("#bookDetailProfile"); if (detailProfile) openProfile(detailProfile.dataset.memberId);
   if (action === "save-profile") { const name = document.getElementById("profileNameInput").value.trim(); const bio = document.getElementById("profileBioInput").value.trim(); const themeColor = document.getElementById("profileColorInput").value; if (name && state.user) setDoc(doc(db, "members", state.user.uid), { displayName: name, bio, themeColor }, { merge: true }).then(() => { Object.assign(state.member, { displayName: name, bio, themeColor }); updateMemberUi(); }); }
   const tab = event.target.closest(".provider-tab"); if (tab) switchProviderTab(tab.dataset.provider);
   const swatch = event.target.closest(".color-swatch"); if (swatch) { document.getElementById("profileColorInput").value = swatch.dataset.color; renderProfileSwatches(swatch.dataset.color); }
   const profileBook = event.target.closest(".profile-book"); if (profileBook) { const book = state.books.find((item) => item.id === profileBook.dataset.bookId); if (book) { closeModal(elements.profileModal); openBookDetail(book); } }
+  const memberCard = event.target.closest(".member-card"); if (memberCard) openProfile(memberCard.dataset.profileId);
 });
 elements.bookshelf.addEventListener("click", (event) => { const card = event.target.closest(".book-card"); const book = state.books.find((item) => item.id === card?.dataset.bookId); if (book) openBookDetail(book); });
 elements.bookshelf.addEventListener("keydown", (event) => { if (["Enter", " "].includes(event.key) && event.target.matches(".book-card")) { event.preventDefault(); const book = state.books.find((item) => item.id === event.target.dataset.bookId); if (book) openBookDetail(book); } });
@@ -297,6 +350,7 @@ elements.uploadArea.addEventListener("drop", (event) => { event.preventDefault()
 elements.coverUpload.addEventListener("change", (event) => { if (event.target.files.length) handleFile(event.target.files[0]); });
 elements.form.addEventListener("submit", submitSuggestion); elements.boardForm.addEventListener("submit", postBoard);
 elements.inviteForm.addEventListener("submit", addInvite);
+elements.personalShelfForm.addEventListener("submit", addPersonalShelfEntry);
 elements.loadMoreBooks.addEventListener("click", () => { state.visibleBooks += BOOKS_PER_PAGE; renderBooks(); });
 document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; [elements.setupModal, elements.suggestionModal, elements.bookDetailModal, elements.profileModal, elements.reviewModal, elements.officerSidebar].filter((modal) => !modal.hidden).forEach(closeModal); });
 document.getElementById("profileColorInput").addEventListener("input", (event) => renderProfileSwatches(event.target.value));
