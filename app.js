@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc,
-  updateDoc, setDoc, getDoc, deleteDoc, arrayUnion
+  updateDoc, setDoc, getDoc, deleteDoc, writeBatch, arrayUnion
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 import {
   getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
@@ -22,8 +22,6 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const booksCollection = collection(db, "books");
 
-// Keep your existing officer email(s) here, in lowercase.
-const ADMIN_EMAILS = ["rizalded60@gmail.com"];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const BOOKS_PER_PAGE = 12;
 const limits = { name: 60, title: 160, author: 100, genre: 80, why: 800, comment: 500, board: 280 };
@@ -41,7 +39,12 @@ const state = {
   currentPickId: null,
   pendingBooks: [],
   announcement: "",
-  unsubscribePendingBooks: null
+  unsubscribePendingBooks: null,
+  unsubscribeMemberManagement: null,
+  members: [],
+  invitedEmails: [],
+  memberPrivate: []
+  ,unsubscribeOwnMember: null
 };
 
 const elements = {
@@ -61,14 +64,17 @@ const elements = {
   announcementText: document.getElementById("announcementText"), announcementEditor: document.getElementById("announcementEditor"),
   announcementInput: document.getElementById("announcementInput"), boardForm: document.getElementById("boardForm"),
   boardText: document.getElementById("boardText"), boardStatus: document.getElementById("boardStatus"), pinBoard: document.getElementById("pinBoard"),
-  reviewButton: document.getElementById("reviewButton"), pendingList: document.getElementById("pendingList")
+  officerToolsButton: document.getElementById("officerToolsButton"), officerSidebar: document.getElementById("officerSidebar"),
+  inviteForm: document.getElementById("inviteForm"), inviteEmail: document.getElementById("inviteEmail"), inviteStatus: document.getElementById("inviteStatus"),
+  invitedList: document.getElementById("invitedList"), memberList: document.getElementById("memberList"),
+  pendingList: document.getElementById("pendingList")
 };
 
 function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value || ""); return node.innerHTML; }
 function initials(name) { return String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); }
 function formatDate(value) { const date = new Date(value); return Number.isNaN(date.valueOf()) ? "Just now" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
-function isOfficer() { return Boolean(state.user?.email && ADMIN_EMAILS.includes(state.user.email.toLowerCase())); }
-function isMember() { return Boolean(state.user && state.member); }
+function isOfficer() { return state.member?.role === "officer"; }
+function isMember() { return Boolean(state.user && state.member && ["member", "officer"].includes(state.member.role)); }
 
 function showMessage(message, type = "success") {
   elements.successMessage.textContent = message;
@@ -88,12 +94,19 @@ async function signInMember() {
 }
 async function ensureMemberProfile(user) {
   const memberRef = doc(db, "members", user.uid);
+  const privateRef = doc(db, "memberPrivate", user.uid);
   const existing = await getDoc(memberRef);
+  const existingPrivate = await getDoc(privateRef);
   const profile = existing.exists() ? existing.data() : {};
   if (!existing.exists()) {
-    await setDoc(memberRef, { displayName: user.displayName || "Club member", photoURL: user.photoURL || "", joinedAt: new Date().toISOString() });
+    const batch = writeBatch(db);
+    batch.set(memberRef, { displayName: user.displayName || "Club member", photoURL: user.photoURL || "", joinedAt: new Date().toISOString(), role: "member", bio: "", themeColor: "" });
+    batch.set(privateRef, { email: user.email || "" });
+    await batch.commit();
+  } else if (!existingPrivate.exists()) {
+    await setDoc(privateRef, { email: user.email || "" });
   }
-  return { ...profile, displayName: profile.displayName || user.displayName || "Club member", photoURL: profile.photoURL || user.photoURL || "", joinedAt: profile.joinedAt || new Date().toISOString() };
+  return { ...profile, displayName: profile.displayName || user.displayName || "Club member", photoURL: profile.photoURL || user.photoURL || "", joinedAt: profile.joinedAt || new Date().toISOString(), role: profile.role || "member", bio: profile.bio || "", themeColor: profile.themeColor || "" };
 }
 function updateMemberUi() {
   const member = isMember();
@@ -103,7 +116,7 @@ function updateMemberUi() {
   elements.memberSignOut.hidden = !member;
   elements.officerPicker.hidden = !isOfficer();
   elements.announcementEditor.hidden = !isOfficer();
-  elements.reviewButton.hidden = !isOfficer();
+  elements.officerToolsButton.hidden = !isOfficer();
   if (isOfficer()) elements.announcementInput.value = state.announcement;
   elements.officerStatus.textContent = isOfficer() ? "Officer controls are ready." : "";
 }
@@ -111,11 +124,19 @@ onAuthStateChanged(auth, async (user) => {
   state.user = user;
   state.member = null;
   if (user) {
-    try { state.member = await ensureMemberProfile(user); }
+    try {
+      state.member = await ensureMemberProfile(user);
+      state.unsubscribeOwnMember?.();
+      state.unsubscribeOwnMember = onSnapshot(doc(db, "members", user.uid), (snapshot) => {
+        state.member = snapshot.exists() ? snapshot.data() : null;
+        updateMemberUi(); subscribePendingBooks(); subscribeMemberManagement();
+      });
+    }
     catch (error) { console.error("Could not create member profile:", error); }
-  }
+  } else { state.unsubscribeOwnMember?.(); state.unsubscribeOwnMember = null; }
   updateMemberUi();
   subscribePendingBooks();
+  subscribeMemberManagement();
 });
 
 // ====== SETUP AND UPLOADS ======
@@ -157,12 +178,14 @@ function renderBooks() {
 function populateCurrentPickOptions() { elements.currentPickSelect.innerHTML = '<option value="">Choose a recommendation…</option>' + state.books.map((book) => `<option value="${book.id}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join(""); renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); }
 function renderCurrentPick(book) { const covered = Boolean(book?.coverUrl); elements.currentPickCover.hidden = !covered; elements.currentPickPlaceholder.hidden = covered; if (covered) elements.currentPickCover.src = book.coverUrl; elements.currentPickPlaceholder.querySelector("span").innerHTML = book ? escapeHtml(book.title).replace(/ /g, "<br>") : "Your First<br>Book Here"; elements.currentPickTitle.textContent = book?.title || "The Current Pick"; elements.currentPickAuthor.textContent = book ? `by ${book.author}` : "Choose a book from the shelf"; elements.currentPickDescription.textContent = book?.why || "When officers select a member recommendation, it will become the club’s Current Pick right here."; elements.currentPickMeta.textContent = book ? `Recommended by ${book.name}${book.genre ? ` · ${book.genre}` : ""}` : "Waiting for the next read"; }
 function openBookDetail(book) { document.getElementById("bookDetailTitle").textContent = book.title; document.getElementById("bookDetailAuthor").textContent = `by ${book.author}`; document.getElementById("bookDetailWhy").textContent = book.why || "No note was added with this recommendation."; document.getElementById("bookDetailMeta").textContent = `${book.genre || "No genre"} · Recommended by ${book.memberName || book.name}`; document.getElementById("bookDetailComments").innerHTML = renderCommentList(book.comments || []); document.getElementById("bookDetailCommentForm").dataset.bookId = book.id; const profileButton = document.getElementById("bookDetailProfile"); profileButton.dataset.memberId = book.memberId || ""; profileButton.textContent = book.memberId ? `View ${book.memberName || book.name}'s shelf` : ""; profileButton.hidden = !book.memberId; const image = document.getElementById("bookDetailCover"); const placeholder = document.getElementById("bookDetailPlaceholder"); image.hidden = !book.coverUrl; placeholder.hidden = Boolean(book.coverUrl); placeholder.textContent = book.title; if (book.coverUrl) image.src = book.coverUrl; showModal(elements.bookDetailModal); }
+const PROFILE_COLORS = ["#e8623d", "#c94a28", "#2a7f7a", "#1f5f5b", "#f4d35e", "#f2b6b0", "#a8cdd8", "#6b6154"];
+function renderProfileSwatches(selected) { document.getElementById("profileSwatches").innerHTML = PROFILE_COLORS.map((color) => `<button type="button" class="color-swatch ${color.toLowerCase() === selected.toLowerCase() ? "selected" : ""}" data-color="${color}" style="--swatch:${color}" aria-label="Use ${color}"></button>`).join(""); }
 async function openProfile(memberId) {
   if (!memberId) return;
   const snapshot = await getDoc(doc(db, "members", memberId));
   if (!snapshot.exists()) return showMessage("This member profile is not available yet.", "error");
   const member = snapshot.data(); const own = state.user?.uid === memberId;
-  const photo = document.getElementById("profilePhoto"), initial = document.getElementById("profileInitial"); photo.hidden = !member.photoURL; initial.hidden = Boolean(member.photoURL); if (member.photoURL) photo.src = member.photoURL; initial.textContent = initials(member.displayName); document.getElementById("profileName").textContent = member.displayName; document.getElementById("profileJoined").textContent = `Member since ${formatDate(member.joinedAt)}`; const ownBooks = state.books.filter((book) => book.memberId === memberId); document.getElementById("profileBooks").innerHTML = ownBooks.length ? ownBooks.map((book) => `<button type="button" data-book-id="${book.id}" class="profile-book">${escapeHtml(book.title)}</button>`).join("") : '<p class="hint">No shelf additions yet.</p>'; const edit = document.getElementById("profileEdit"); edit.hidden = !own; if (own) document.getElementById("profileNameInput").value = member.displayName; elements.profileModal.dataset.memberId = memberId; showModal(elements.profileModal);
+  const photo = document.getElementById("profilePhoto"), initial = document.getElementById("profileInitial"), bio = document.getElementById("profileBio"); photo.hidden = !member.photoURL; initial.hidden = Boolean(member.photoURL); if (member.photoURL) photo.src = member.photoURL; initial.textContent = initials(member.displayName); initial.style.background = member.themeColor || "var(--coral)"; document.getElementById("profileName").textContent = member.displayName; bio.textContent = member.bio || ""; bio.hidden = !member.bio; document.getElementById("profileJoined").textContent = `Member since ${formatDate(member.joinedAt)}`; const ownBooks = state.books.filter((book) => book.memberId === memberId); document.getElementById("profileBooks").innerHTML = ownBooks.length ? ownBooks.map((book) => `<button type="button" data-book-id="${book.id}" class="profile-book">${escapeHtml(book.title)}</button>`).join("") : '<p class="hint">No shelf additions yet.</p>'; const edit = document.getElementById("profileEdit"); edit.hidden = !own; if (own) { document.getElementById("profileNameInput").value = member.displayName; document.getElementById("profileBioInput").value = member.bio || ""; document.getElementById("profileColorInput").value = /^#[0-9a-f]{6}$/i.test(member.themeColor || "") ? member.themeColor : "#e8623d"; renderProfileSwatches(member.themeColor || "#e8623d"); } elements.profileModal.dataset.memberId = memberId; showModal(elements.profileModal);
 }
 async function postComment(event) { event.preventDefault(); const form = event.target; const name = form.elements["comment-name"].value.trim(); const text = form.elements["comment-text"].value.trim(); if (!name || !text) return; const button = form.querySelector("button[type=submit]"); button.disabled = true; try { await updateDoc(doc(db, "books", form.dataset.bookId), { comments: arrayUnion({ name, text, date: new Date().toISOString() }) }); form.reset(); } catch (error) { console.error(error); showMessage("Could not post your comment — check your connection and try again.", "error"); } finally { button.disabled = false; } }
 
@@ -189,6 +212,46 @@ function subscribePendingBooks() {
     renderPendingBooks();
   }, (error) => console.error("Pending suggestions error:", error));
 }
+
+function subscribeMemberManagement() {
+  state.unsubscribeMemberManagement?.();
+  state.members = []; state.invitedEmails = []; state.memberPrivate = [];
+  renderMemberManagement();
+  if (!isOfficer()) return;
+  const unsubscribers = [
+    onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberManagement(); }),
+    onSnapshot(collection(db, "allowedEmails"), (snapshot) => { state.invitedEmails = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberManagement(); }),
+    onSnapshot(collection(db, "memberPrivate"), (snapshot) => { state.memberPrivate = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberManagement(); })
+  ];
+  state.unsubscribeMemberManagement = () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+}
+
+function renderMemberManagement() {
+  const joinedEmails = new Set(state.memberPrivate.map((member) => String(member.email || "").toLowerCase()));
+  const pendingInvites = state.invitedEmails.filter((invite) => !joinedEmails.has(String(invite.id).toLowerCase()));
+  elements.invitedList.innerHTML = pendingInvites.length ? pendingInvites.map((invite) => `<div class="member-row"><span>${escapeHtml(invite.id)}</span></div>`).join("") : '<p class="hint">No waiting invitations.</p>';
+  elements.memberList.innerHTML = state.members.length ? state.members.map((member) => `<div class="member-row"><span><strong>${escapeHtml(member.displayName)}</strong><small>${escapeHtml(member.role)}</small></span><button type="button" data-action="toggle-role" data-uid="${member.id}">${member.role === "officer" ? "Make member" : "Make officer"}</button></div>`).join("") : '<p class="hint">No members have joined yet.</p>';
+}
+
+async function addInvite(event) {
+  event.preventDefault();
+  if (!isOfficer()) return;
+  const email = elements.inviteEmail.value.trim().toLowerCase();
+  if (!email) return;
+  try {
+    await setDoc(doc(db, "allowedEmails", email), { email, invitedAt: new Date().toISOString() });
+    elements.inviteEmail.value = "";
+    elements.inviteStatus.textContent = "Invitation added.";
+  } catch (error) { console.error(error); elements.inviteStatus.textContent = "Could not add that invitation."; }
+}
+
+async function toggleMemberRole(uid) {
+  if (!isOfficer()) return;
+  const member = state.members.find((entry) => entry.id === uid);
+  if (!member) return;
+  try { await updateDoc(doc(db, "members", uid), { role: member.role === "officer" ? "member" : "officer" }); }
+  catch (error) { console.error(error); showMessage("Could not update that role.", "error"); }
+}
 async function reviewPending(id, approved) { if (!isOfficer()) return; const pending = state.pendingBooks.find((book) => book.id === id); if (!pending) return; try { if (approved) { const { id: ignored, submittedAt, status, ...book } = pending; await addDoc(booksCollection, { ...book, approvedAt: new Date().toISOString() }); } await deleteDoc(doc(db, "pendingBooks", id)); } catch (error) { console.error(error); showMessage("Could not update this suggestion.", "error"); } }
 
 // ====== ANNOUNCEMENTS AND PIN BOARD ======
@@ -211,10 +274,13 @@ document.addEventListener("click", (event) => {
   if (action === "close-book-detail") closeModal(elements.bookDetailModal); if (action === "close-profile") closeModal(elements.profileModal); if (action === "close-review") closeModal(elements.reviewModal);
   if (action === "save-current-pick") { if (isOfficer() && elements.currentPickSelect.value) setDoc(doc(db, "siteSettings", "currentPick"), { bookId: elements.currentPickSelect.value, updatedAt: new Date().toISOString() }); }
   if (action === "save-announcement") saveAnnouncement(); if (action === "open-review" && isOfficer()) showModal(elements.reviewModal);
+  if (action === "open-officer-tools" && isOfficer()) showModal(elements.officerSidebar); if (action === "close-officer-tools") closeModal(elements.officerSidebar);
   if (action === "approve-pending") reviewPending(target.dataset.id, true); if (action === "reject-pending") reviewPending(target.dataset.id, false);
-  if (action === "show-profile") openProfile(state.user?.uid); if (target?.id === "bookDetailProfile") openProfile(target.dataset.memberId);
-  if (action === "save-profile") { const name = document.getElementById("profileNameInput").value.trim(); if (name && state.user) setDoc(doc(db, "members", state.user.uid), { displayName: name }, { merge: true }).then(() => { state.member.displayName = name; updateMemberUi(); }); }
+  if (action === "toggle-role") toggleMemberRole(target.dataset.uid);
+  if (action === "show-profile") openProfile(state.user?.uid); const detailProfile = event.target.closest("#bookDetailProfile"); if (detailProfile) openProfile(detailProfile.dataset.memberId);
+  if (action === "save-profile") { const name = document.getElementById("profileNameInput").value.trim(); const bio = document.getElementById("profileBioInput").value.trim(); const themeColor = document.getElementById("profileColorInput").value; if (name && state.user) setDoc(doc(db, "members", state.user.uid), { displayName: name, bio, themeColor }, { merge: true }).then(() => { Object.assign(state.member, { displayName: name, bio, themeColor }); updateMemberUi(); }); }
   const tab = event.target.closest(".provider-tab"); if (tab) switchProviderTab(tab.dataset.provider);
+  const swatch = event.target.closest(".color-swatch"); if (swatch) { document.getElementById("profileColorInput").value = swatch.dataset.color; renderProfileSwatches(swatch.dataset.color); }
   const profileBook = event.target.closest(".profile-book"); if (profileBook) { const book = state.books.find((item) => item.id === profileBook.dataset.bookId); if (book) { closeModal(elements.profileModal); openBookDetail(book); } }
 });
 elements.bookshelf.addEventListener("click", (event) => { const card = event.target.closest(".book-card"); const book = state.books.find((item) => item.id === card?.dataset.bookId); if (book) openBookDetail(book); });
@@ -230,8 +296,10 @@ elements.uploadArea.addEventListener("dragleave", () => elements.uploadArea.clas
 elements.uploadArea.addEventListener("drop", (event) => { event.preventDefault(); elements.uploadArea.classList.remove("dragover"); if (event.dataTransfer.files.length) handleFile(event.dataTransfer.files[0]); });
 elements.coverUpload.addEventListener("change", (event) => { if (event.target.files.length) handleFile(event.target.files[0]); });
 elements.form.addEventListener("submit", submitSuggestion); elements.boardForm.addEventListener("submit", postBoard);
+elements.inviteForm.addEventListener("submit", addInvite);
 elements.loadMoreBooks.addEventListener("click", () => { state.visibleBooks += BOOKS_PER_PAGE; renderBooks(); });
-document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; [elements.setupModal, elements.suggestionModal, elements.bookDetailModal, elements.profileModal, elements.reviewModal].filter((modal) => !modal.hidden).forEach(closeModal); });
+document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; [elements.setupModal, elements.suggestionModal, elements.bookDetailModal, elements.profileModal, elements.reviewModal, elements.officerSidebar].filter((modal) => !modal.hidden).forEach(closeModal); });
+document.getElementById("profileColorInput").addEventListener("input", (event) => renderProfileSwatches(event.target.value));
 if (!state.uploadProvider && localStorage.getItem("setupDismissed") !== "true") setTimeout(showSetup, 600);
 
 const revealObserver = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add("in-view"); revealObserver.unobserve(entry.target); } }), { threshold: .15, rootMargin: "0px 0px -60px 0px" });
