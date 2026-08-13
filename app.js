@@ -32,8 +32,6 @@ const state = {
   imgbbKey: localStorage.getItem("imgbbKey") || "",
   uploadedImageUrl: null,
   isUploading: false,
-  shelfUploadedImageUrl: null,
-  shelfIsUploading: false,
   books: [],
   visibleBooks: BOOKS_PER_PAGE,
   user: null,
@@ -72,9 +70,7 @@ const elements = {
   inviteForm: document.getElementById("inviteForm"), inviteEmail: document.getElementById("inviteEmail"), inviteStatus: document.getElementById("inviteStatus"),
   invitedList: document.getElementById("invitedList"), memberList: document.getElementById("memberList"),
   pendingList: document.getElementById("pendingList"), memberDirectory: document.getElementById("memberDirectory"),
-  personalShelfForm: document.getElementById("personalShelfForm"),
-  shelfUploadArea: document.getElementById("shelfUploadArea"), shelfCoverUpload: document.getElementById("shelfCoverUpload"),
-  shelfUploadPreview: document.getElementById("shelfUploadPreview"), shelfUploadStatus: document.getElementById("shelfUploadStatus")
+  personalShelfForm: document.getElementById("personalShelfForm")
 };
 
 function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value || ""); return node.innerHTML; }
@@ -92,14 +88,16 @@ function showMessage(message, type = "success") {
   showMessage.timer = setTimeout(() => elements.successMessage.classList.remove("visible"), 4500);
 }
 function setUploadStatus(message, type = "") { elements.uploadStatus.textContent = message; elements.uploadStatus.className = `upload-status ${type}`.trim(); }
-function setShelfUploadStatus(message, type = "") { elements.shelfUploadStatus.textContent = message; elements.shelfUploadStatus.className = `upload-status ${type}`.trim(); }
 function showModal(modal) { modal.hidden = false; requestAnimationFrame(() => modal.classList.add("active")); modal.querySelector("button")?.focus(); }
 function closeModal(modal) { modal.classList.remove("active"); setTimeout(() => { modal.hidden = true; }, 180); }
 
 // ====== MEMBER ACCOUNTS ======
 async function signInMember() {
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-  catch (error) { console.error("Sign-in failed:", error); elements.memberGreeting.textContent = "Sign-in was cancelled or unavailable."; }
+  catch (error) {
+    console.error("Sign-in failed:", error);
+    elements.memberGreeting.textContent = error.code === "auth/popup-closed-by-user" ? "Sign-in was cancelled." : "Could not open Google sign-in. Please try again.";
+  }
 }
 async function ensureMemberProfile(user) {
   const memberRef = doc(db, "members", user.uid);
@@ -107,15 +105,28 @@ async function ensureMemberProfile(user) {
   const existing = await getDoc(memberRef);
   const existingPrivate = await getDoc(privateRef);
   const profile = existing.exists() ? existing.data() : {};
+  const normalisedProfile = {
+    displayName: profile.displayName || user.displayName || "Club member",
+    photoURL: profile.photoURL || user.photoURL || "",
+    joinedAt: profile.joinedAt || new Date().toISOString(),
+    role: profile.role || "member",
+    bio: profile.bio || "",
+    themeColor: profile.themeColor || ""
+  };
   if (!existing.exists()) {
     const batch = writeBatch(db);
-    batch.set(memberRef, { displayName: user.displayName || "Club member", photoURL: user.photoURL || "", joinedAt: new Date().toISOString(), role: "member", bio: "", themeColor: "" });
+    batch.set(memberRef, normalisedProfile);
     batch.set(privateRef, { email: user.email || "" });
     await batch.commit();
-  } else if (!existingPrivate.exists()) {
-    await setDoc(privateRef, { email: user.email || "" });
+  } else {
+    // Older site versions created a profile without a role, bio, or theme color.
+    // Rewrite only that old schema into the current safe member profile format.
+    const profileFields = ["displayName", "photoURL", "joinedAt", "role", "bio", "themeColor"];
+    const needsMigration = profileFields.some((field) => !(field in profile)) || Object.keys(profile).some((field) => !profileFields.includes(field));
+    if (needsMigration) await setDoc(memberRef, normalisedProfile);
+    if (!existingPrivate.exists()) await setDoc(privateRef, { email: user.email || "" });
   }
-  return { ...profile, displayName: profile.displayName || user.displayName || "Club member", photoURL: profile.photoURL || user.photoURL || "", joinedAt: profile.joinedAt || new Date().toISOString(), role: profile.role || "member", bio: profile.bio || "", themeColor: profile.themeColor || "" };
+  return normalisedProfile;
 }
 function updateMemberUi() {
   const member = isMember();
@@ -141,7 +152,13 @@ onAuthStateChanged(auth, async (user) => {
         updateMemberUi(); subscribePendingBooks(); subscribeMemberManagement();
       });
     }
-    catch (error) { console.error("Could not create member profile:", error); }
+    catch (error) {
+      console.error("Could not create member profile:", error);
+      const notApproved = error.code === "permission-denied";
+      elements.memberGreeting.textContent = notApproved ? "This Google account is not on the member list yet." : "Could not finish member sign-in.";
+      showMessage(notApproved ? "Ask an officer to add your email under Officer tools → Manage members." : "Member sign-in needs attention. Please try again.", "error");
+      await signOut(auth);
+    }
   } else { state.unsubscribeOwnMember?.(); state.unsubscribeOwnMember = null; }
   updateMemberUi();
   subscribePendingBooks();
@@ -158,26 +175,17 @@ function saveUploadProvider(provider) {
   localStorage.setItem(provider === "cloudinary" ? "cloudName" : "imgbbKey", value); localStorage.setItem("uploadProvider", provider); window.location.reload();
 }
 function configuredUploadProvider() { return state.uploadProvider && (state.uploadProvider !== "cloudinary" || state.cloudName) && (state.uploadProvider !== "imgbb" || state.imgbbKey); }
-async function handleFile(file, target = "suggestion") {
-  const isShelf = target === "shelf";
-  const busy = isShelf ? state.shelfIsUploading : state.isUploading;
-  const input = isShelf ? elements.shelfCoverUpload : elements.coverUpload;
-  const preview = isShelf ? elements.shelfUploadPreview : elements.uploadPreview;
-  const setStatus = isShelf ? setShelfUploadStatus : setUploadStatus;
-  if (busy) return;
-  if (!file.type.startsWith("image/")) return setStatus("Please upload an image file.", "error");
-  if (file.size > MAX_IMAGE_BYTES) return setStatus("Please choose an image smaller than 8 MB.", "error");
-  if (!configuredUploadProvider()) { setStatus("Set up cover uploads first.", "error"); showSetup(); return; }
-  if (isShelf) { state.shelfIsUploading = true; } else { state.isUploading = true; }
-  input.disabled = true;
-  const reader = new FileReader(); reader.onload = (event) => { preview.src = event.target.result; preview.classList.add("visible"); }; reader.readAsDataURL(file);
-  setStatus("Uploading…", "uploading");
-  try {
-    const url = state.uploadProvider === "imgbb" ? await uploadToImgbb(file) : await uploadToCloudinary(file);
-    if (isShelf) state.shelfUploadedImageUrl = url; else state.uploadedImageUrl = url;
-    setStatus("Uploaded", "success");
-  } catch (error) { console.error(error); setStatus(`Upload failed: ${error.message}`, "error"); }
-  finally { if (isShelf) state.shelfIsUploading = false; else state.isUploading = false; input.disabled = false; }
+async function handleFile(file) {
+  if (state.isUploading) return;
+  if (!file.type.startsWith("image/")) return setUploadStatus("Please upload an image file.", "error");
+  if (file.size > MAX_IMAGE_BYTES) return setUploadStatus("Please choose an image smaller than 8 MB.", "error");
+  if (!configuredUploadProvider()) { setUploadStatus("Set up cover uploads first.", "error"); showSetup(); return; }
+  state.isUploading = true; elements.coverUpload.disabled = true;
+  const reader = new FileReader(); reader.onload = (event) => { elements.uploadPreview.src = event.target.result; elements.uploadPreview.classList.add("visible"); }; reader.readAsDataURL(file);
+  setUploadStatus("Uploading…", "uploading");
+  try { state.uploadedImageUrl = state.uploadProvider === "imgbb" ? await uploadToImgbb(file) : await uploadToCloudinary(file); setUploadStatus("Uploaded", "success"); }
+  catch (error) { console.error(error); setUploadStatus(`Upload failed: ${error.message}`, "error"); }
+  finally { state.isUploading = false; elements.coverUpload.disabled = false; }
 }
 async function uploadToCloudinary(file) { const data = new FormData(); data.append("file", file); data.append("upload_preset", "bookclub_unsigned"); const response = await fetch(`https://api.cloudinary.com/v1_1/${state.cloudName}/image/upload`, { method: "POST", body: data }); const result = await response.json().catch(() => ({})); if (!response.ok || !result.secure_url) throw new Error(result.error?.message || "Cloudinary upload failed"); return result.secure_url; }
 async function uploadToImgbb(file) { const data = new FormData(); data.append("image", file); const response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(state.imgbbKey)}`, { method: "POST", body: data }); const result = await response.json().catch(() => ({})); if (!response.ok || !result.success) throw new Error(result.error?.message || "ImgBB upload failed"); return result.data.url; }
@@ -212,7 +220,6 @@ async function openProfile(memberId) {
   const edit = document.getElementById("profileEdit"); edit.hidden = !own; elements.personalShelfForm.hidden = !own;
   if (own) { document.getElementById("profileNameInput").value = member.displayName; document.getElementById("profileBioInput").value = member.bio || ""; document.getElementById("profileColorInput").value = accent; renderProfileSwatches(accent); }
   elements.profileModal.dataset.memberId = memberId; document.getElementById("profileShelfTitle").textContent = own ? "My shelf" : `${member.displayName}'s shelf`;
-  elements.personalShelfForm.reset(); elements.shelfUploadPreview.classList.remove("visible"); elements.shelfUploadPreview.src = ""; elements.shelfCoverUpload.value = ""; state.shelfUploadedImageUrl = null; setShelfUploadStatus("");
   subscribeProfileShelf(memberId); showModal(elements.profileModal);
 }
 
@@ -240,11 +247,7 @@ async function addPersonalShelfEntry(event) {
   const form = event.target; const title = form.elements["shelf-title"].value.trim(); const author = form.elements["shelf-author"].value.trim();
   if (!title || !author) return;
   const button = form.querySelector("button"); button.disabled = true;
-  try {
-    await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), { title, author, coverUrl: state.shelfUploadedImageUrl || "", status: form.elements["shelf-status"].value, note: form.elements["shelf-note"].value.trim(), date: new Date().toISOString() });
-    form.reset();
-    elements.shelfUploadPreview.classList.remove("visible"); elements.shelfUploadPreview.src = ""; elements.shelfCoverUpload.value = ""; state.shelfUploadedImageUrl = null; setShelfUploadStatus("");
-  }
+  try { await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), { title, author, coverUrl: form.elements["shelf-cover"].value.trim(), status: form.elements["shelf-status"].value, note: form.elements["shelf-note"].value.trim(), date: new Date().toISOString() }); form.reset(); }
   catch (error) { console.error(error); showMessage("Could not add that book to your shelf.", "error"); }
   finally { button.disabled = false; }
 }
@@ -368,10 +371,6 @@ elements.uploadArea.addEventListener("dragover", (event) => { event.preventDefau
 elements.uploadArea.addEventListener("dragleave", () => elements.uploadArea.classList.remove("dragover"));
 elements.uploadArea.addEventListener("drop", (event) => { event.preventDefault(); elements.uploadArea.classList.remove("dragover"); if (event.dataTransfer.files.length) handleFile(event.dataTransfer.files[0]); });
 elements.coverUpload.addEventListener("change", (event) => { if (event.target.files.length) handleFile(event.target.files[0]); });
-elements.shelfUploadArea.addEventListener("dragover", (event) => { event.preventDefault(); elements.shelfUploadArea.classList.add("dragover"); });
-elements.shelfUploadArea.addEventListener("dragleave", () => elements.shelfUploadArea.classList.remove("dragover"));
-elements.shelfUploadArea.addEventListener("drop", (event) => { event.preventDefault(); elements.shelfUploadArea.classList.remove("dragover"); if (event.dataTransfer.files.length) handleFile(event.dataTransfer.files[0], "shelf"); });
-elements.shelfCoverUpload.addEventListener("change", (event) => { if (event.target.files.length) handleFile(event.target.files[0], "shelf"); });
 elements.form.addEventListener("submit", submitSuggestion); elements.boardForm.addEventListener("submit", postBoard);
 elements.inviteForm.addEventListener("submit", addInvite);
 elements.personalShelfForm.addEventListener("submit", addPersonalShelfEntry);
