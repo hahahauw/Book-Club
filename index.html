@@ -7,13 +7,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Book Enthusiasts Club home"><span class="brand-mark">B</span><span>Book Enthusiasts<br>Club</span></a>
     <nav aria-label="Main navigation"><a href="#shelf">Bookshelf</a><a href="#events">Events</a><a href="#members">Members</a></nav>
-    <div class="auth-area"><span id="authStatus" aria-live="polite">Exploring as a guest</span><button id="signInButton" type="button" class="button button-quiet">Member sign in</button><button id="profileButton" type="button" class="button button-quiet" hidden>My library</button><button id="signOutButton" type="button" class="button button-quiet" hidden>Sign out</button></div>
+    <div class="auth-area"><button id="themeButton" type="button" class="button button-quiet" aria-pressed="false">Dark mode</button><span id="authStatus" aria-live="polite">Exploring as a guest</span><button id="signInButton" type="button" class="button button-quiet">Member sign in</button><button id="profileButton" type="button" class="button button-quiet" hidden>My library</button><button id="signOutButton" type="button" class="button button-quiet" hidden>Sign out</button></div>
   </header>
 
   <main id="top">
@@ -48,7 +48,7 @@
 
     <section id="events" class="shell split-section" aria-labelledby="eventsHeading">
       <div><div class="section-label"><span>03</span><h2 id="eventsHeading">Upcoming Events</h2></div><p class="section-copy">Meetings, quiet reading time, book swaps, and a reason to keep the calendar open.</p><div id="eventsList" class="events-list"><p class="empty-state">Events will appear here.</p></div><form id="eventForm" class="officer-panel stacked-form" hidden><label>Event title <input id="eventTitle" maxlength="100" required></label><label>Date <input id="eventDate" type="date" required></label><label>Details <input id="eventDetails" maxlength="180"></label><button class="button" type="submit">Add event</button></form></div>
-      <div><div class="section-label"><span>04</span><h2>Reading Memories</h2></div><p class="section-copy">The moments between the pages.</p><div id="memoriesGrid" class="memories-grid"><p class="empty-state">Reading memories will appear here.</p></div><form id="memoryForm" class="officer-panel stacked-form" hidden><label>Hosted image URL <input id="memoryImage" type="url" maxlength="500" required></label><label>Caption <input id="memoryCaption" maxlength="100" required></label><label>Category <input id="memoryCategory" maxlength="50"></label><button class="button" type="submit">Add memory</button></form></div>
+      <div><div class="section-label"><span>04</span><h2>Reading Memories</h2></div><p class="section-copy">The moments between the pages.</p><div id="memoriesGrid" class="memories-grid"><p class="empty-state">Reading memories will appear here.</p></div><form id="memoryForm" class="officer-panel stacked-form" hidden><label>Hosted image URL <input id="memoryImage" type="url" maxlength="500" placeholder="Paste a link, or upload a file below"></label><label>Upload a photo <input id="memoryFile" type="file" accept="image/*"></label><label>Caption <input id="memoryCaption" maxlength="100" required></label><label>Category <input id="memoryCategory" maxlength="50"></label><button class="button" type="submit">Add memory</button></form></div>
     </section>
 
     <section id="members" class="shell members-section" aria-labelledby="membersHeading">
@@ -56,6 +56,7 @@
       <p class="section-copy">Every member gets a public little library—a place to keep their own reading life.</p>
       <div id="membersGrid" class="members-grid"><p class="empty-state">Member libraries will appear here.</p></div>
       <form id="inviteForm" class="officer-panel" hidden><label>Invite an approved member <input id="inviteEmail" type="email" required placeholder="reader@example.com"></label><button class="button" type="submit">Approve email</button></form>
+      <form id="uploadSettingsForm" class="officer-panel upload-settings" hidden><div><p class="eyebrow">OFFICER MEDIA TOOL</p><p>Use the same Cloudinary unsigned upload preset as before. These settings stay only in this officer’s browser.</p></div><label>Cloudinary cloud name <input id="cloudName" maxlength="100" placeholder="e.g., bookclub"></label><label>Unsigned upload preset <input id="uploadPreset" maxlength="100" value="bookclub_unsigned"></label><button class="button" type="submit">Save upload settings</button><span id="uploadSettingsStatus" class="form-message"></span></form>
     </section>
   </main>
 
@@ -66,6 +67,6 @@
   <dialog id="profileDialog" class="dialog"><article class="dialog-card profile-dialog-card"><button class="close-dialog" type="button" data-close="profileDialog" aria-label="Close">×</button><div id="profileContent"></div></article></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>
