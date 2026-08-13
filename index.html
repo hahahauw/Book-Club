@@ -73,6 +73,7 @@
 
     <section class="reveal" style="--tilt: .8deg;">
       <div class="section-head"><span class="section-num">02</span><h2>The Member Bookshelf</h2><span class="section-rule"></span></div>
+      <div class="shelf-tools"><label class="sr-only" for="bookSearch">Search the member bookshelf</label><input type="search" id="bookSearch" placeholder="Search title, author, or genre"><label class="sr-only" for="genreFilter">Filter by genre</label><select id="genreFilter"><option value="">All genres</option></select></div>
       <p class="section-sub">Cover-first browsing—select a book to read its recommendation and join the discussion.</p>
       <div class="card"><div class="bookshelf" id="bookshelf"><div class="empty-shelf">Loading the shelf…</div></div><button type="button" class="load-more-btn" id="loadMoreBooks" hidden>Show more books</button></div>
     </section>
@@ -129,12 +130,13 @@
       <button type="button" class="modal-close-btn" data-action="close-profile" aria-label="Close profile">×</button>
       <aside class="profile-identity">
         <div class="profile-hero"><img id="profilePhoto" class="profile-photo" alt="" hidden><div id="profileInitial" class="profile-initial"></div><div><p class="profile-label">MEMBER LIBRARY</p><h3 id="profileName"></h3><p id="profileBio" class="profile-bio" hidden></p><p id="profileJoined" class="hint"></p></div></div>
+        <div class="profile-stats" id="profileStats" aria-label="Reading statistics"></div>
         <div class="profile-edit" id="profileEdit" hidden><label for="profileNameInput">Display name</label><input id="profileNameInput" maxlength="60"><label for="profileBioInput">Short bio</label><input id="profileBioInput" maxlength="80" placeholder="A little about your reading taste"><fieldset class="color-picker"><legend>Library accent</legend><div id="profileSwatches"></div><label class="custom-color">Custom <input id="profileColorInput" type="color" value="#e8623d"></label></fieldset><button type="button" data-action="save-profile" class="setup-link-btn">Save profile</button></div>
       </aside>
       <section class="profile-library" aria-label="Personal shelf">
         <div class="profile-shelf-head"><div><p class="profile-label">ON THE SHELF</p><h4 id="profileShelfTitle">Their shelf</h4></div><span id="profileShelfCount" class="shelf-count"></span></div>
         <div class="profile-shelf" id="profileBooks"></div>
-        <form id="personalShelfForm" class="personal-shelf-form" hidden><h4>Add to my shelf</h4><div class="personal-fields"><input name="shelf-title" maxlength="160" placeholder="Book title" required><input name="shelf-author" maxlength="100" placeholder="Author" required><select name="shelf-status"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></div><div class="form-group"><label>Book cover</label><div class="upload-area" id="shelfUploadArea"><input type="file" id="shelfCoverUpload" accept="image/*"><div class="upload-text"><div class="icon">＋</div><div>Drop a cover here or click to browse</div></div><img class="upload-preview" id="shelfUploadPreview" alt="Cover preview"><div class="upload-status" id="shelfUploadStatus"></div></div></div><textarea name="shelf-note" maxlength="280" placeholder="A tiny note, review, or memory (optional)"></textarea><button type="submit">Add to my shelf</button></form>
+        <form id="personalShelfForm" class="personal-shelf-form" hidden><h4>Add to my shelf</h4><div class="personal-fields"><input name="shelf-title" maxlength="160" placeholder="Book title" required><input name="shelf-author" maxlength="100" placeholder="Author" required><input name="shelf-cover" type="url" maxlength="500" placeholder="Cover image URL (optional)"><select name="shelf-status"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></div><textarea name="shelf-note" maxlength="280" placeholder="A tiny note, review, or memory (optional)"></textarea><button type="submit">Add to my shelf</button></form>
       </section>
     </div>
   </div>
@@ -144,7 +146,7 @@
   <aside class="officer-sidebar" id="officerSidebar" aria-label="Officer tools" hidden>
     <div class="officer-sidebar-head"><h2>Officer tools</h2><button type="button" class="modal-close-btn" data-action="close-officer-tools" aria-label="Close officer tools">×</button></div>
     <button type="button" data-action="open-review" class="sidebar-action">Review suggestions</button>
-    <section class="manage-members"><h3>Manage members</h3><form id="inviteForm"><label for="inviteEmail">Invite email</label><div><input type="email" id="inviteEmail" required placeholder="member@example.com"><button type="submit">Add</button></div></form><p id="inviteStatus" class="hint"></p><h4>Invited, not joined</h4><div id="invitedList" class="member-list"></div><h4>Members</h4><div id="memberList" class="member-list"></div></section>
+    <section class="manage-members"><h3>Manage members</h3><p class="hint">Add an email before someone signs in. You can remove an unused invitation below.</p><form id="inviteForm"><label for="inviteEmail">Invite email</label><div><input type="email" id="inviteEmail" required placeholder="member@example.com"><button type="submit">Add</button></div></form><p id="inviteStatus" class="hint"></p><h4>Invited, not joined</h4><div id="invitedList" class="member-list"></div><h4>Members</h4><div id="memberList" class="member-list"></div></section>
   </aside>
   <script type="module" src="app.js"></script>
 </body>

@@ -34,6 +34,8 @@ const state = {
   isUploading: false,
   books: [],
   visibleBooks: BOOKS_PER_PAGE,
+  bookSearch: "",
+  genreFilter: "",
   user: null,
   member: null,
   currentPickId: null,
@@ -51,6 +53,7 @@ const state = {
 
 const elements = {
   bookshelf: document.getElementById("bookshelf"), form: document.getElementById("recForm"),
+  bookSearch: document.getElementById("bookSearch"), genreFilter: document.getElementById("genreFilter"),
   successMessage: document.getElementById("successMsg"), uploadArea: document.getElementById("uploadArea"),
   coverUpload: document.getElementById("coverUpload"), uploadPreview: document.getElementById("uploadPreview"),
   uploadStatus: document.getElementById("uploadStatus"), setupModal: document.getElementById("setupModal"),
@@ -70,7 +73,7 @@ const elements = {
   inviteForm: document.getElementById("inviteForm"), inviteEmail: document.getElementById("inviteEmail"), inviteStatus: document.getElementById("inviteStatus"),
   invitedList: document.getElementById("invitedList"), memberList: document.getElementById("memberList"),
   pendingList: document.getElementById("pendingList"), memberDirectory: document.getElementById("memberDirectory"),
-  personalShelfForm: document.getElementById("personalShelfForm")
+  personalShelfForm: document.getElementById("personalShelfForm"), profileStats: document.getElementById("profileStats")
 };
 
 function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value || ""); return node.innerHTML; }
@@ -93,11 +96,14 @@ function closeModal(modal) { modal.classList.remove("active"); setTimeout(() => 
 
 // ====== MEMBER ACCOUNTS ======
 async function signInMember() {
+  elements.memberGreeting.textContent = "Opening Google sign-in…";
+  elements.memberSignIn.disabled = true;
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch (error) {
     console.error("Sign-in failed:", error);
     elements.memberGreeting.textContent = error.code === "auth/popup-closed-by-user" ? "Sign-in was cancelled." : "Could not open Google sign-in. Please try again.";
   }
+  finally { elements.memberSignIn.disabled = false; }
 }
 async function ensureMemberProfile(user) {
   const memberRef = doc(db, "members", user.uid);
@@ -145,6 +151,7 @@ onAuthStateChanged(auth, async (user) => {
   state.member = null;
   if (user) {
     try {
+      elements.memberGreeting.textContent = "Setting up your member library…";
       state.member = await ensureMemberProfile(user);
       state.unsubscribeOwnMember?.();
       state.unsubscribeOwnMember = onSnapshot(doc(db, "members", user.uid), (snapshot) => {
@@ -195,10 +202,25 @@ function renderCommentList(comments) {
   if (!comments?.length) return '<div class="no-comments">No comments yet — be the first!</div>';
   return comments.map((comment) => `<div class="comment-item"><div class="comment-avatar">${escapeHtml(initials(comment.name))}</div><div><div class="comment-author">${escapeHtml(comment.name)} <span>${formatDate(comment.date)}</span></div><div class="comment-text">${escapeHtml(comment.text)}</div></div></div>`).join("");
 }
+function filteredBooks() {
+  const search = state.bookSearch.trim().toLowerCase();
+  return state.books.filter((book) => {
+    const matchesSearch = !search || [book.title, book.author, book.genre, book.name, book.memberName]
+      .some((value) => String(value || "").toLowerCase().includes(search));
+    return matchesSearch && (!state.genreFilter || String(book.genre || "").toLowerCase() === state.genreFilter);
+  });
+}
+function populateGenreFilter() {
+  const genres = [...new Set(state.books.map((book) => String(book.genre || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const current = state.genreFilter;
+  elements.genreFilter.innerHTML = '<option value="">All genres</option>' + genres.map((genre) => `<option value="${escapeHtml(genre.toLowerCase())}">${escapeHtml(genre)}</option>`).join("");
+  elements.genreFilter.value = current;
+}
 function renderBooks() {
-  const shown = state.books.slice(0, state.visibleBooks);
-  elements.bookshelf.innerHTML = shown.length ? shown.map((book) => `<article class="book-card" data-book-id="${book.id}" role="button" tabindex="0" aria-label="Open details for ${escapeHtml(book.title)}">${book.coverUrl ? `<img class="book-card-cover" src="${escapeHtml(book.coverUrl)}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy">` : `<div class="book-card-cover-placeholder"><span>${escapeHtml(book.title)}</span></div>`}<div class="book-card-overlay"><span>${escapeHtml(book.title)}</span><small>Open book</small></div></article>`).join("") : '<div class="empty-shelf">The shelf is waiting for its first books.<span class="sub">Be the first to add one below!</span></div>';
-  elements.loadMoreBooks.hidden = state.visibleBooks >= state.books.length;
+  const books = filteredBooks(); const shown = books.slice(0, state.visibleBooks);
+  elements.bookshelf.innerHTML = shown.length ? shown.map((book) => `<article class="book-card" data-book-id="${book.id}" role="button" tabindex="0" aria-label="Open details for ${escapeHtml(book.title)}">${book.coverUrl ? `<img class="book-card-cover" src="${escapeHtml(book.coverUrl)}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy">` : `<div class="book-card-cover-placeholder"><span>${escapeHtml(book.title)}</span></div>`}<div class="book-card-overlay"><span>${escapeHtml(book.title)}</span><small>Open book</small></div></article>`).join("") : `<div class="empty-shelf">${state.books.length ? "No books match that search." : "The shelf is waiting for its first books."}<span class="sub">${state.books.length ? "Try another title, author, or genre." : "Be the first to add one below!"}</span></div>`;
+  elements.loadMoreBooks.hidden = state.visibleBooks >= books.length;
+  populateGenreFilter();
   populateCurrentPickOptions();
 }
 function populateCurrentPickOptions() { elements.currentPickSelect.innerHTML = '<option value="">Choose a recommendation…</option>' + state.books.map((book) => `<option value="${book.id}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join(""); renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); }
@@ -251,6 +273,53 @@ async function addPersonalShelfEntry(event) {
   catch (error) { console.error(error); showMessage("Could not add that book to your shelf.", "error"); }
   finally { button.disabled = false; }
 }
+
+// Personal shelves deliberately use the same small form for adding and editing.
+// Keeping one path means books retain the same validation and Firestore shape.
+function renderProfileShelf() {
+  const entries = state.profileShelfEntries;
+  const own = state.user?.uid === elements.profileModal.dataset.memberId;
+  const reading = entries.filter((entry) => entry.status === "reading").length;
+  const finished = entries.filter((entry) => entry.status === "read").length;
+  document.getElementById("profileShelfCount").textContent = entries.length ? `${entries.length} book${entries.length === 1 ? "" : "s"}` : "New shelf";
+  elements.profileStats.innerHTML = `<span><strong>${entries.length}</strong> on shelf</span><span><strong>${reading}</strong> reading</span><span><strong>${finished}</strong> finished</span>`;
+  document.getElementById("profileBooks").innerHTML = entries.length ? entries.map((entry) => `
+    <article class="personal-book">
+      ${entry.coverUrl ? `<img src="${escapeHtml(entry.coverUrl)}" alt="Cover of ${escapeHtml(entry.title)}">` : `<div class="personal-book-placeholder">${escapeHtml(entry.title)}</div>`}
+      <div><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(entry.author)}</span><small>${escapeHtml(entry.status.replace(/-/g, " "))}</small>${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ""}</div>
+      ${own ? `<div class="shelf-book-actions"><button type="button" class="edit-shelf-book" data-action="edit-shelf-book" data-entry-id="${entry.id}">Edit</button><button type="button" class="remove-shelf-book" data-action="remove-shelf-book" data-entry-id="${entry.id}" aria-label="Remove ${escapeHtml(entry.title)}">×</button></div>` : ""}
+    </article>`).join("") : '<p class="hint shelf-empty">This shelf is waiting for its first book.</p>';
+}
+function editPersonalShelfEntry(entryId) {
+  if (state.user?.uid !== elements.profileModal.dataset.memberId) return;
+  const entry = state.profileShelfEntries.find((item) => item.id === entryId); if (!entry) return;
+  const form = elements.personalShelfForm;
+  form.elements["shelf-title"].value = entry.title || "";
+  form.elements["shelf-author"].value = entry.author || "";
+  form.elements["shelf-cover"].value = entry.coverUrl || "";
+  form.elements["shelf-status"].value = entry.status || "reading";
+  form.elements["shelf-note"].value = entry.note || "";
+  form.dataset.entryId = entryId;
+  form.querySelector("h4").textContent = "Edit shelf book";
+  form.querySelector("button[type=submit]").textContent = "Save changes";
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+async function addPersonalShelfEntry(event) {
+  event.preventDefault();
+  if (!isMember() || state.user?.uid !== elements.profileModal.dataset.memberId) return;
+  const form = event.target; const title = form.elements["shelf-title"].value.trim(); const author = form.elements["shelf-author"].value.trim();
+  if (!title || !author) return;
+  const button = form.querySelector("button[type=submit]"); button.disabled = true;
+  const entry = { title, author, coverUrl: form.elements["shelf-cover"].value.trim(), status: form.elements["shelf-status"].value, note: form.elements["shelf-note"].value.trim(), date: new Date().toISOString() };
+  try {
+    if (form.dataset.entryId) await updateDoc(doc(db, "memberShelves", state.user.uid, "entries", form.dataset.entryId), entry);
+    else await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), entry);
+    form.reset(); delete form.dataset.entryId;
+    form.querySelector("h4").textContent = "Add to my shelf";
+    button.textContent = "Add to my shelf";
+  } catch (error) { console.error(error); showMessage("Could not save that shelf book.", "error"); }
+  finally { button.disabled = false; }
+}
 async function postComment(event) { event.preventDefault(); const form = event.target; const name = form.elements["comment-name"].value.trim(); const text = form.elements["comment-text"].value.trim(); if (!name || !text) return; const button = form.querySelector("button[type=submit]"); button.disabled = true; try { await updateDoc(doc(db, "books", form.dataset.bookId), { comments: arrayUnion({ name, text, date: new Date().toISOString() }) }); form.reset(); } catch (error) { console.error(error); showMessage("Could not post your comment — check your connection and try again.", "error"); } finally { button.disabled = false; } }
 
 // ====== SUGGESTIONS AND OFFICER REVIEW ======
@@ -279,7 +348,7 @@ function subscribePendingBooks() {
 
 function subscribeMemberManagement() {
   state.unsubscribeMemberManagement?.();
-  state.members = []; state.invitedEmails = []; state.memberPrivate = [];
+  state.invitedEmails = []; state.memberPrivate = [];
   renderMemberManagement();
   if (!isOfficer()) return;
   const unsubscribers = [
@@ -305,6 +374,13 @@ function renderMemberDirectory() {
     </button>`).join("") : '<div class="no-comments">Member profiles will appear here soon.</div>';
 }
 
+function renderMemberManagement() {
+  const joinedEmails = new Set(state.memberPrivate.map((member) => String(member.email || "").toLowerCase()));
+  const pendingInvites = state.invitedEmails.filter((invite) => !joinedEmails.has(String(invite.id).toLowerCase()));
+  elements.invitedList.innerHTML = pendingInvites.length ? pendingInvites.map((invite) => `<div class="member-row"><span>${escapeHtml(invite.id)}</span><button type="button" class="text-link-btn" data-action="revoke-invite" data-email="${escapeHtml(invite.id)}">Remove</button></div>`).join("") : '<p class="hint">No waiting invitations.</p>';
+  elements.memberList.innerHTML = state.members.length ? state.members.map((member) => `<div class="member-row"><span><strong>${escapeHtml(member.displayName)}</strong><small>${escapeHtml(member.role || "member")}</small></span><button type="button" data-action="toggle-role" data-uid="${member.id}">${member.role === "officer" ? "Make member" : "Make officer"}</button></div>`).join("") : '<p class="hint">No members have joined yet.</p>';
+}
+
 async function addInvite(event) {
   event.preventDefault();
   if (!isOfficer()) return;
@@ -315,6 +391,11 @@ async function addInvite(event) {
     elements.inviteEmail.value = "";
     elements.inviteStatus.textContent = "Invitation added.";
   } catch (error) { console.error(error); elements.inviteStatus.textContent = "Could not add that invitation."; }
+}
+async function revokeInvite(email) {
+  if (!isOfficer() || !email) return;
+  try { await deleteDoc(doc(db, "allowedEmails", email)); elements.inviteStatus.textContent = "Unused invitation removed."; }
+  catch (error) { console.error(error); elements.inviteStatus.textContent = "Could not remove that invitation."; }
 }
 
 async function toggleMemberRole(uid) {
@@ -331,12 +412,21 @@ async function saveAnnouncement() { if (!isOfficer()) return; const text = eleme
 function renderBoard(posts) { elements.pinBoard.innerHTML = posts.length ? posts.map((post) => `<article class="pin-note"><div class="pin-avatar">${escapeHtml(initials(post.displayName))}</div><p>${escapeHtml(post.text)}</p><span>${escapeHtml(post.displayName)} · ${formatDate(post.date)}</span></article>`).join("") : '<div class="no-comments">No pins yet. Leave the first note!</div>'; }
 async function postBoard(event) { event.preventDefault(); const text = elements.boardText.value.trim(); if (!isMember()) { elements.boardStatus.textContent = "Sign in as a member to pin a note."; return; } if (!text) return; const button = elements.boardForm.querySelector("button"); button.disabled = true; try { await addDoc(collection(db, "boardPosts"), { text, memberId: state.user.uid, displayName: state.member.displayName, photoURL: state.member.photoURL || "", date: new Date().toISOString() }); elements.boardText.value = ""; elements.boardStatus.textContent = "Pinned!"; } catch (error) { console.error(error); elements.boardStatus.textContent = "Could not pin that note."; } finally { button.disabled = false; } }
 
+function renderBoard(posts) {
+  elements.pinBoard.innerHTML = posts.length ? posts.map((post) => `<article class="pin-note"><div class="pin-avatar">${escapeHtml(initials(post.displayName))}</div><p>${escapeHtml(post.text)}</p><span>${escapeHtml(post.displayName)} · ${formatDate(post.date)}</span>${isOfficer() ? `<button type="button" class="remove-pin" data-action="remove-pin" data-id="${post.id}" aria-label="Remove this pin">×</button>` : ""}</article>`).join("") : '<div class="no-comments">No pins yet. Leave the first note!</div>';
+}
+async function removePin(id) {
+  if (!isOfficer() || !id) return;
+  try { await deleteDoc(doc(db, "boardPosts", id)); }
+  catch (error) { console.error(error); showMessage("Could not remove that pin.", "error"); }
+}
+
 // ====== REALTIME LISTENERS ======
 onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberDirectory(); renderMemberManagement(); }, (error) => { console.error("Member directory error:", error); elements.memberDirectory.innerHTML = '<div class="no-comments">Member profiles are unavailable right now.</div>'; });
 onSnapshot(query(booksCollection, orderBy("date", "desc")), (snapshot) => { state.books = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderBooks(); }, (error) => { console.error(error); elements.bookshelf.innerHTML = '<div class="empty-shelf">Couldn’t load the shelf right now.</div>'; });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { state.currentPickId = snapshot.data()?.bookId || null; renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; elements.announcementText.textContent = state.announcement || "No announcements yet—check back soon."; if (isOfficer()) elements.announcementInput.value = state.announcement; });
-onSnapshot(query(collection(db, "boardPosts"), orderBy("date", "desc")), (snapshot) => renderBoard(snapshot.docs.map((item) => item.data())), (error) => { console.error(error); elements.pinBoard.innerHTML = '<div class="no-comments">The pin board is taking a small break.</div>'; });
+onSnapshot(query(collection(db, "boardPosts"), orderBy("date", "desc")), (snapshot) => renderBoard(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), (error) => { console.error(error); elements.pinBoard.innerHTML = '<div class="no-comments">The pin board is taking a small break.</div>'; });
 
 // ====== EVENTS ======
 document.addEventListener("click", (event) => {
@@ -350,7 +440,9 @@ document.addEventListener("click", (event) => {
   if (action === "save-announcement") saveAnnouncement(); if (action === "open-review" && isOfficer()) showModal(elements.reviewModal);
   if (action === "open-officer-tools" && isOfficer()) showModal(elements.officerSidebar); if (action === "close-officer-tools") closeModal(elements.officerSidebar);
   if (action === "approve-pending") reviewPending(target.dataset.id, true); if (action === "reject-pending") reviewPending(target.dataset.id, false);
+  if (action === "revoke-invite") revokeInvite(target.dataset.email); if (action === "remove-pin") removePin(target.dataset.id);
   if (action === "toggle-role") toggleMemberRole(target.dataset.uid);
+  if (action === "edit-shelf-book") editPersonalShelfEntry(target.dataset.entryId);
   if (action === "remove-shelf-book" && state.user?.uid === elements.profileModal.dataset.memberId) deleteDoc(doc(db, "memberShelves", state.user.uid, "entries", target.dataset.entryId));
   if (action === "show-profile") openProfile(state.user?.uid); const detailProfile = event.target.closest("#bookDetailProfile"); if (detailProfile) openProfile(detailProfile.dataset.memberId);
   if (action === "save-profile") { const name = document.getElementById("profileNameInput").value.trim(); const bio = document.getElementById("profileBioInput").value.trim(); const themeColor = document.getElementById("profileColorInput").value; if (name && state.user) setDoc(doc(db, "members", state.user.uid), { displayName: name, bio, themeColor }, { merge: true }).then(() => { Object.assign(state.member, { displayName: name, bio, themeColor }); updateMemberUi(); }); }
@@ -375,6 +467,9 @@ elements.form.addEventListener("submit", submitSuggestion); elements.boardForm.a
 elements.inviteForm.addEventListener("submit", addInvite);
 elements.personalShelfForm.addEventListener("submit", addPersonalShelfEntry);
 elements.loadMoreBooks.addEventListener("click", () => { state.visibleBooks += BOOKS_PER_PAGE; renderBooks(); });
+elements.bookSearch.addEventListener("input", (event) => { state.bookSearch = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
+elements.genreFilter.addEventListener("change", (event) => { state.genreFilter = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
+elements.profileModal.addEventListener("error", (event) => { if (event.target.matches(".personal-book img")) { const placeholder = document.createElement("div"); placeholder.className = "personal-book-placeholder"; placeholder.textContent = event.target.alt.replace(/^Cover of /, ""); event.target.replaceWith(placeholder); } if (event.target.id === "profilePhoto") { event.target.hidden = true; document.getElementById("profileInitial").hidden = false; } }, true);
 document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; [elements.setupModal, elements.suggestionModal, elements.bookDetailModal, elements.profileModal, elements.reviewModal, elements.officerSidebar].filter((modal) => !modal.hidden).forEach(closeModal); });
 document.getElementById("profileColorInput").addEventListener("input", (event) => renderProfileSwatches(event.target.value));
 if (!state.uploadProvider && localStorage.getItem("setupDismissed") !== "true") setTimeout(showSetup, 600);
