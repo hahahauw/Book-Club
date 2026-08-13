@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
   <header class="site-header">
@@ -53,7 +53,7 @@
 
     <section id="members" class="shell members-section" aria-labelledby="membersHeading">
       <div class="section-label"><span>05</span><h2 id="membersHeading">Meet the Club</h2></div>
-      <p class="section-copy">Every member gets a public little library—a place to keep their own reading life.</p>
+      <p class="section-copy">This is our little roll call: tap a name, peek at a shelf, and get to know the readers making this club feel like ours.</p>
       <div id="membersGrid" class="members-grid"><p class="empty-state">Member libraries will appear here.</p></div>
       <form id="inviteForm" class="officer-panel" hidden><label>Invite an approved member <input id="inviteEmail" type="email" required placeholder="reader@example.com"></label><button class="button" type="submit">Approve email</button></form>
       <form id="uploadSettingsForm" class="officer-panel upload-settings" hidden><div><p class="eyebrow">OFFICER MEDIA TOOL</p><p>Use the same Cloudinary unsigned upload preset as before. These settings stay only in this officer’s browser.</p></div><label>Cloudinary cloud name <input id="cloudName" maxlength="100" placeholder="e.g., bookclub"></label><label>Unsigned upload preset <input id="uploadPreset" maxlength="100" value="bookclub_unsigned"></label><button class="button" type="submit">Save upload settings</button><span id="uploadSettingsStatus" class="form-message"></span></form>
@@ -64,9 +64,10 @@
 
   <dialog id="suggestionDialog" class="dialog"><form id="suggestionForm" class="dialog-card"><button class="close-dialog" type="button" data-close="suggestionDialog" aria-label="Close">×</button><p class="eyebrow">ADD TO THE CONVERSATION</p><h2>Suggest a book</h2><label>Your name <input id="suggestName" maxlength="60" required></label><label>Book title <input id="suggestTitle" maxlength="160" required></label><label>Author <input id="suggestAuthor" maxlength="100" required></label><label>Genre <input id="suggestGenre" maxlength="80"></label><label>Cover image URL <input id="suggestCover" type="url" maxlength="500" placeholder="Optional"></label><label>Why should we read it? <textarea id="suggestWhy" maxlength="800"></textarea></label><button class="button" type="submit">Send suggestion</button><p id="suggestionMessage" class="form-message"></p></form></dialog>
 
+  <dialog id="bookDialog" class="dialog"><article class="dialog-card book-dialog-card"><button class="close-dialog" type="button" data-close="bookDialog" aria-label="Close">×</button><div id="bookContent"></div></article></dialog>
   <dialog id="profileDialog" class="dialog"><article class="dialog-card profile-dialog-card"><button class="close-dialog" type="button" data-close="profileDialog" aria-label="Close">×</button><div id="profileContent"></div></article></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=3"></script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>
