@@ -211,6 +211,7 @@ function filteredBooks() {
   });
 }
 function populateGenreFilter() {
+  if (!elements.genreFilter) return;
   const genres = [...new Set(state.books.map((book) => String(book.genre || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const current = state.genreFilter;
   elements.genreFilter.innerHTML = '<option value="">All genres</option>' + genres.map((genre) => `<option value="${escapeHtml(genre.toLowerCase())}">${escapeHtml(genre)}</option>`).join("");
@@ -467,12 +468,20 @@ elements.form.addEventListener("submit", submitSuggestion); elements.boardForm.a
 elements.inviteForm.addEventListener("submit", addInvite);
 elements.personalShelfForm.addEventListener("submit", addPersonalShelfEntry);
 elements.loadMoreBooks.addEventListener("click", () => { state.visibleBooks += BOOKS_PER_PAGE; renderBooks(); });
-elements.bookSearch.addEventListener("input", (event) => { state.bookSearch = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
-elements.genreFilter.addEventListener("change", (event) => { state.genreFilter = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
+elements.bookSearch?.addEventListener("input", (event) => { state.bookSearch = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
+elements.genreFilter?.addEventListener("change", (event) => { state.genreFilter = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
 elements.profileModal.addEventListener("error", (event) => { if (event.target.matches(".personal-book img")) { const placeholder = document.createElement("div"); placeholder.className = "personal-book-placeholder"; placeholder.textContent = event.target.alt.replace(/^Cover of /, ""); event.target.replaceWith(placeholder); } if (event.target.id === "profilePhoto") { event.target.hidden = true; document.getElementById("profileInitial").hidden = false; } }, true);
 document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; [elements.setupModal, elements.suggestionModal, elements.bookDetailModal, elements.profileModal, elements.reviewModal, elements.officerSidebar].filter((modal) => !modal.hidden).forEach(closeModal); });
 document.getElementById("profileColorInput").addEventListener("input", (event) => renderProfileSwatches(event.target.value));
 if (!state.uploadProvider && localStorage.getItem("setupDismissed") !== "true") setTimeout(showSetup, 600);
 
-const revealObserver = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add("in-view"); revealObserver.unobserve(entry.target); } }), { threshold: .15, rootMargin: "0px 0px -60px 0px" });
-document.querySelectorAll(".reveal").forEach((element) => revealObserver.observe(element));
+try {
+  document.body.classList.add("js-ready");
+  if (!("IntersectionObserver" in window)) throw new Error("IntersectionObserver unavailable");
+  const revealObserver = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add("in-view"); revealObserver.unobserve(entry.target); } }), { threshold: .15, rootMargin: "0px 0px -60px 0px" });
+  document.querySelectorAll(".reveal").forEach((element) => revealObserver.observe(element));
+} catch (error) {
+  console.warn("Entrance animation disabled:", error);
+  document.body.classList.remove("js-ready");
+  document.querySelectorAll(".reveal").forEach((element) => element.classList.add("in-view"));
+}

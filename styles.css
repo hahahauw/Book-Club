@@ -127,13 +127,15 @@
   }
 
   /* ---------- Scroll-reveal ---------- */
-  .reveal {
+  .reveal { opacity: 1; transform: none; }
+
+  .js-ready .reveal {
     opacity: 0;
     transform: translateY(28px) rotate(var(--tilt, 0deg));
     transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .reveal.in-view {
+  .js-ready .reveal.in-view {
     opacity: 1;
     transform: translateY(0) rotate(0deg);
   }
