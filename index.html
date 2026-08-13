@@ -1,173 +1,71 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Book Enthusiasts Club</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Caveat:wght@500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260813-bootfix">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
-  <div class="setup-modal" id="setupModal" hidden>
-    <div class="setup-card">
-      <button type="button" class="modal-close-btn" data-action="close-setup" aria-label="Close">×</button>
-      <h3>Set up cover uploads</h3>
-      <p>Choose one image host. Its settings stay only in this browser, so each club officer can use their own account.</p>
-      <div class="provider-tabs">
-        <button type="button" class="provider-tab active" data-provider="cloudinary">Cloudinary</button>
-        <button type="button" class="provider-tab" data-provider="imgbb">ImgBB</button>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Book Enthusiasts Club home"><span class="brand-mark">B</span><span>Book Enthusiasts<br>Club</span></a>
+    <nav aria-label="Main navigation"><a href="#shelf">Bookshelf</a><a href="#events">Events</a><a href="#members">Members</a></nav>
+    <div class="auth-area"><span id="authStatus" aria-live="polite">Exploring as a guest</span><button id="signInButton" type="button" class="button button-quiet">Member sign in</button><button id="profileButton" type="button" class="button button-quiet" hidden>My library</button><button id="signOutButton" type="button" class="button button-quiet" hidden>Sign out</button></div>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <p class="eyebrow">EST. 2026 · A CLUB FOR CURIOUS READERS</p>
+      <h1>A good book<br>is better <em>together.</em></h1>
+      <p class="hero-copy">A shared home for the books we love, the ones we are discovering, and the readers who make the club ours.</p>
+      <div class="hero-actions"><a class="button" href="#shelf">Explore the shelf</a><a class="text-action" href="#members">Meet the club <span>→</span></a></div>
+      <p class="member-note">Library cards are reserved for club members invited by an officer. Everyone is welcome to browse.</p>
+    </section>
+
+    <section class="shell feature-section" aria-labelledby="monthHeading">
+      <div class="section-label"><span>01</span><h2 id="monthHeading">Book of the Month</h2></div>
+      <div id="bookOfMonth" class="month-card">
+        <div class="month-cover placeholder-cover">The next<br>club read</div>
+        <div><p class="eyebrow">CHOSEN BY THE CLUB</p><h3>Waiting for the next chapter.</h3><p>When an officer chooses a book from the shelf, it will appear here with reader progress and discussion.</p></div>
       </div>
-      <div class="provider-panel active" id="panel-cloudinary">
-        <p>1. Create a free Cloudinary account. 2. Create an unsigned upload preset named <code>bookclub_unsigned</code>. 3. Paste your cloud name below.</p>
-        <div class="form-group"><label for="cloudNameInput">Cloudinary cloud name</label><input type="text" id="cloudNameInput" placeholder="e.g., mybookclub"></div>
-        <button type="button" class="close-btn" data-action="save-cloudinary">Save and close</button>
+      <div id="monthCommunity" class="month-community" hidden>
+        <div class="month-summary"><span id="monthRating">No ratings yet</span><span id="monthProgress">0% finished</span></div>
+        <form id="monthForm" class="compact-form"><label>Your rating <select id="monthStars"><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Not for me</option><option value="1">★☆☆☆☆ — Finished it</option></select></label><label class="checkbox-line"><input id="monthFinished" type="checkbox"> I finished this book</label><label>Discussion note <textarea id="monthComment" maxlength="280" placeholder="A thought, a favourite part, a question…"></textarea></label><button class="button" type="submit">Save my update</button></form>
+        <p id="monthMessage" class="form-message"></p><div id="monthNotes" class="month-notes"></div>
       </div>
-      <div class="provider-panel" id="panel-imgbb">
-        <p>1. Create a free ImgBB account. 2. Copy its API key. 3. Paste it below.</p>
-        <div class="form-group"><label for="imgbbKeyInput">ImgBB API key</label><input type="text" id="imgbbKeyInput" placeholder="Paste your API key"></div>
-        <button type="button" class="close-btn" data-action="save-imgbb">Save and close</button>
-      </div>
-      <button type="button" class="maybe-later-btn" data-action="close-setup">Maybe later</button>
-    </div>
-  </div>
-
-  <div class="container">
-    <header>
-      <div class="catalog-label">est. 2026 ✿ pull up a chair</div>
-      <h1>Book Enthusiasts Club</h1>
-      <p class="tagline">“A room without books is like a body without a soul.” — Cicero</p>
-      <button type="button" class="directory-link" data-action="browse-members">Meet our readers ↓</button>
-      <div class="member-bar">
-        <span id="memberGreeting">Reading as a guest</span>
-        <button type="button" class="setup-link-btn" data-action="member-sign-in" id="memberSignIn">Member sign in</button>
-        <button type="button" class="text-link-btn" data-action="show-profile" id="memberProfile" hidden>My shelf</button>
-        <button type="button" class="text-link-btn" data-action="sign-out" id="memberSignOut" hidden>Sign out</button>
-      </div>
-      <p class="member-note">Library cards are for invited club members. Visitors are welcome to explore.</p>
-    </header>
-
-    <section class="reveal" style="--tilt: -1deg;">
-      <div class="section-head"><span class="section-num">01</span><h2>Book of the Month</h2><span class="section-rule"></span></div>
-      <div class="card due-card">
-        <div class="due-card-inner">
-          <img class="book-cover-img" id="currentPickCover" alt="Cover of the current pick" hidden>
-          <div class="book-cover-placeholder" id="currentPickPlaceholder"><span>Your First<br>Book Here</span></div>
-          <div class="book-info">
-            <p class="section-kicker">Club feature</p>
-            <h3 id="currentPickTitle">The Current Pick</h3>
-            <p class="author" id="currentPickAuthor">Choose a book from the shelf</p>
-            <p class="desc" id="currentPickDescription">When your officers select a member recommendation, it will become the club’s Current Pick right here.</p>
-            <span class="due-stamp"><span class="dot"></span> <span id="currentPickMeta">Waiting for the next read</span></span>
-            <div class="officer-controls">
-              <div id="officerPicker" hidden>
-                <label for="currentPickSelect">Choose the Book of the Month</label>
-                <div class="officer-picker-row"><select id="currentPickSelect"></select><button type="button" data-action="save-current-pick" class="setup-link-btn">Set Book of the Month</button></div>
-              </div>
-              <p class="officer-status" id="officerStatus" aria-live="polite"></p>
-            </div>
-          </div>
-        </div><div class="due-card-edge"></div>
-      </div>
+      <div id="monthOfficer" class="officer-panel" hidden><label>Choose the Book of the Month <select id="monthPicker"></select></label><button id="saveMonthButton" class="button" type="button">Set selected book</button></div>
     </section>
 
-    <section class="reveal" style="--tilt: .2deg;">
-      <div class="section-head"><span class="section-num">02</span><h2>Reading Updates</h2><span class="section-rule"></span></div>
-      <div class="card book-month-card">
-        <div id="bookMonthFeature" class="book-month-feature"><div class="book-month-placeholder">The next club read is being chosen.</div></div>
-        <div class="book-month-community"><div class="book-month-stats"><span id="bookMonthAverage">No ratings yet</span><span id="bookMonthProgress">0% finished</span></div><p id="bookMonthPrompt" class="hint">When the club chooses a book, you can share a star rating and a thought here.</p><form id="bookMonthRatingForm" class="book-month-form"><label for="bookMonthStars">Your rating</label><select id="bookMonthStars" name="stars"><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Not for me</option><option value="1">★☆☆☆☆ — Finished it</option></select><label class="month-finished"><input type="checkbox" id="bookMonthFinished" name="finished"> I finished this month’s read</label><textarea id="bookMonthComment" name="comment" maxlength="280" placeholder="A thought for the club discussion (optional)"></textarea><button type="submit">Save my reading update</button></form><p id="bookMonthStatus" class="hint"></p><div id="bookMonthComments" class="month-comments"></div></div>
-        <div id="bookMonthOfficer" class="officer-editor book-month-officer" hidden><label for="bookMonthSelect">Choose from the member bookshelf</label><select id="bookMonthSelect"></select><label for="bookMonthLabel">Month label</label><input id="bookMonthLabel" maxlength="40" placeholder="e.g., August 2026"><button type="button" class="setup-link-btn" data-action="save-book-month">Set Book of the Month</button></div>
-      </div>
+    <section id="shelf" class="shell shelf-section" aria-labelledby="shelfHeading">
+      <div class="section-label"><span>02</span><h2 id="shelfHeading">The Member Bookshelf</h2></div>
+      <div class="section-intro"><p>Every cover carries a recommendation from a reader in the club.</p><button id="openSuggestionButton" type="button" class="button">Suggest a book</button></div>
+      <div class="shelf-controls"><label class="visually-hidden" for="bookSearch">Search books</label><input id="bookSearch" type="search" placeholder="Search title, author, or genre"><label class="visually-hidden" for="genreFilter">Filter by genre</label><select id="genreFilter"><option value="">All genres</option></select></div>
+      <div id="booksGrid" class="books-grid"><p class="empty-state">The shelf is ready to load.</p></div>
     </section>
 
-    <section class="reveal" style="--tilt: .8deg;">
-      <div class="section-head"><span class="section-num">02</span><h2>The Member Bookshelf</h2><span class="section-rule"></span></div>
-      <div class="shelf-tools"><label class="sr-only" for="bookSearch">Search the member bookshelf</label><input type="search" id="bookSearch" placeholder="Search title, author, or genre"><label class="sr-only" for="genreFilter">Filter by genre</label><select id="genreFilter"><option value="">All genres</option></select></div>
-      <p class="section-sub">Cover-first browsing—select a book to read its recommendation and join the discussion.</p>
-      <div class="card"><div class="bookshelf" id="bookshelf"><div class="empty-shelf">Loading the shelf…</div></div><button type="button" class="load-more-btn" id="loadMoreBooks" hidden>Show more books</button></div>
+    <section id="events" class="shell split-section" aria-labelledby="eventsHeading">
+      <div><div class="section-label"><span>03</span><h2 id="eventsHeading">Upcoming Events</h2></div><p class="section-copy">Meetings, quiet reading time, book swaps, and a reason to keep the calendar open.</p><div id="eventsList" class="events-list"><p class="empty-state">Events will appear here.</p></div><form id="eventForm" class="officer-panel stacked-form" hidden><label>Event title <input id="eventTitle" maxlength="100" required></label><label>Date <input id="eventDate" type="date" required></label><label>Details <input id="eventDetails" maxlength="180"></label><button class="button" type="submit">Add event</button></form></div>
+      <div><div class="section-label"><span>04</span><h2>Reading Memories</h2></div><p class="section-copy">The moments between the pages.</p><div id="memoriesGrid" class="memories-grid"><p class="empty-state">Reading memories will appear here.</p></div><form id="memoryForm" class="officer-panel stacked-form" hidden><label>Hosted image URL <input id="memoryImage" type="url" maxlength="500" required></label><label>Caption <input id="memoryCaption" maxlength="100" required></label><label>Category <input id="memoryCategory" maxlength="50"></label><button class="button" type="submit">Add memory</button></form></div>
     </section>
 
-    <section class="reveal" style="--tilt: -.6deg;">
-      <div class="section-head"><span class="section-num">03</span><h2>Share a Favorite</h2><span class="section-rule"></span></div>
-      <div class="card suggestion-card"><p>Have a book the club should know about? Add it to the shelf—or send it to the officers for review.</p><button type="button" data-action="open-suggestion" class="suggest-book-btn">✦ Suggest a Book</button><p class="hint">Members publish immediately. Guest suggestions are reviewed first.</p></div>
+    <section id="members" class="shell members-section" aria-labelledby="membersHeading">
+      <div class="section-label"><span>05</span><h2 id="membersHeading">Meet the Club</h2></div>
+      <p class="section-copy">Every member gets a public little library—a place to keep their own reading life.</p>
+      <div id="membersGrid" class="members-grid"><p class="empty-state">Member libraries will appear here.</p></div>
+      <form id="inviteForm" class="officer-panel" hidden><label>Invite an approved member <input id="inviteEmail" type="email" required placeholder="reader@example.com"></label><button class="button" type="submit">Approve email</button></form>
     </section>
+  </main>
 
-    <section class="reveal" style="--tilt: .4deg;">
-      <div class="section-head"><span class="section-num">04</span><h2>Announcements</h2><span class="section-rule"></span></div>
-      <div class="card announcement-card"><p id="announcementText">No announcements yet—check back soon.</p><div id="announcementEditor" class="officer-editor" hidden><label for="announcementInput">Officer update</label><textarea id="announcementInput" maxlength="600" placeholder="Share a meeting reminder or club update…"></textarea><button type="button" data-action="save-announcement" class="setup-link-btn">Save announcement</button></div></div>
-    </section>
+  <footer class="site-footer"><p>Book Enthusiasts Club</p><p>Made for sharing stories.</p></footer>
 
-    <section class="reveal" style="--tilt: -.5deg;">
-      <div class="section-head"><span class="section-num">05</span><h2>The Pin Board</h2><span class="section-rule"></span></div>
-      <div class="card"><p class="section-sub">A small place for quotes, reactions, and reading thoughts.</p><form id="boardForm" class="board-form"><textarea id="boardText" maxlength="280" placeholder="Leave a note for the club…" required></textarea><button type="submit">Pin note</button></form><p id="boardStatus" class="hint"></p><div class="pin-board" id="pinBoard"><div class="no-comments">Loading notes…</div></div></div>
-    </section>
+  <dialog id="suggestionDialog" class="dialog"><form id="suggestionForm" class="dialog-card"><button class="close-dialog" type="button" data-close="suggestionDialog" aria-label="Close">×</button><p class="eyebrow">ADD TO THE CONVERSATION</p><h2>Suggest a book</h2><label>Your name <input id="suggestName" maxlength="60" required></label><label>Book title <input id="suggestTitle" maxlength="160" required></label><label>Author <input id="suggestAuthor" maxlength="100" required></label><label>Genre <input id="suggestGenre" maxlength="80"></label><label>Cover image URL <input id="suggestCover" type="url" maxlength="500" placeholder="Optional"></label><label>Why should we read it? <textarea id="suggestWhy" maxlength="800"></textarea></label><button class="button" type="submit">Send suggestion</button><p id="suggestionMessage" class="form-message"></p></form></dialog>
 
-    <section class="reveal" style="--tilt: .1deg;">
-      <div class="section-head"><span class="section-num">06</span><h2>Upcoming Events</h2><span class="section-rule"></span></div>
-      <div class="card"><div id="eventsList" class="events-list"><p class="hint">Loading upcoming events…</p></div><form id="eventForm" class="officer-editor event-form" hidden><label for="eventTitle">Event title</label><input id="eventTitle" maxlength="100" required placeholder="e.g., Silent Reading Session"><label for="eventDate">Date</label><input id="eventDate" type="date" required><label for="eventDetails">Details (optional)</label><input id="eventDetails" maxlength="180" placeholder="Location, time, or a short note"><button type="submit" class="setup-link-btn">Add event</button></form></div>
-    </section>
+  <dialog id="profileDialog" class="dialog"><article class="dialog-card profile-dialog-card"><button class="close-dialog" type="button" data-close="profileDialog" aria-label="Close">×</button><div id="profileContent"></div></article></dialog>
 
-    <section class="reveal" style="--tilt: -.2deg;">
-      <div class="section-head"><span class="section-num">07</span><h2>Reading Memories</h2><span class="section-rule"></span></div>
-      <p class="section-sub">Book discussions, library days, book fairs, and all the little moments in between.</p><div id="memoriesGallery" class="memories-gallery"><p class="hint">Loading memories…</p></div><form id="memoryForm" class="officer-editor memory-form" hidden><label for="memoryImageUrl">Photo URL</label><input id="memoryImageUrl" type="url" maxlength="500" required placeholder="Paste a hosted image link"><label for="memoryTitle">Caption</label><input id="memoryTitle" maxlength="100" required placeholder="e.g., Book fair afternoon"><label for="memoryCategory">Category</label><input id="memoryCategory" maxlength="50" placeholder="e.g., Library meeting"><button type="submit" class="setup-link-btn">Add memory</button></form>
-    </section>
-
-    <section class="reveal" id="memberDirectorySection" style="--tilt: .3deg;">
-      <div class="section-head"><span class="section-num">06</span><h2>Meet the Club</h2><span class="section-rule"></span></div>
-      <p class="section-sub">A little library card for every reader in the club. Open a profile to browse their personal shelf.</p>
-      <div class="member-directory" id="memberDirectory"><div class="no-comments">Loading member profiles…</div></div>
-    </section>
-
-    <section class="reveal" style="--tilt: .5deg;">
-      <div class="section-head"><span class="section-num">07</span><h2>About the Club</h2><span class="section-rule"></span></div>
-      <div class="card"><p style="margin-bottom: 16px;">We're a group of readers who meet every other Thursday. No pressure, no required reading speed, no judgment if you haven't finished a book yet.</p><p style="color: var(--ink-soft); font-size: .94rem;">Location: [School Library (HS)]<br>Schedule: Every other Thursday<br>Chat: [Messenger]</p></div>
-    </section>
-    <footer><p>Made with <span class="heart">♥</span> by the Book Enthusiasts Club</p><p class="est">Est. 2026</p></footer>
-  </div>
-
-  <div class="setup-modal" id="suggestionModal" role="dialog" aria-modal="true" aria-labelledby="suggestionTitle" hidden>
-    <div class="setup-card suggestion-modal-card"><button type="button" class="modal-close-btn" data-action="close-suggestion" aria-label="Close">×</button><h3 id="suggestionTitle">Suggest a book</h3><div class="success-msg" id="successMsg"></div>
-      <div class="suggestion-modal-tools"><button type="button" data-action="show-setup" class="setup-link-btn">⚙ Set up cover uploads</button></div>
-      <form id="recForm">
-        <div class="form-group"><label for="name">What should we call you?</label><input type="text" id="name" name="name" maxlength="60" required></div>
-        <div class="form-group"><label for="bookTitle">Book title</label><input type="text" id="bookTitle" name="bookTitle" maxlength="160" required></div>
-        <div class="form-group"><label for="author">Author</label><input type="text" id="author" name="author" maxlength="100" required></div>
-        <div class="form-group"><label for="genre">Genre (optional)</label><input type="text" id="genre" name="genre" maxlength="80"></div>
-        <div class="form-group"><label>Book cover</label><div class="upload-area" id="uploadArea"><input type="file" id="coverUpload" accept="image/*"><div class="upload-text"><div class="icon">＋</div><div>Drop a cover here or click to browse</div></div><img class="upload-preview" id="uploadPreview" alt="Cover preview"><div class="upload-status" id="uploadStatus"></div></div></div>
-        <div class="form-group"><label for="why">Why do you like it?</label><textarea id="why" name="why" maxlength="800"></textarea></div>
-        <button type="submit">Send suggestion</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="setup-modal" id="bookDetailModal" role="dialog" aria-modal="true" aria-labelledby="bookDetailTitle" hidden>
-    <div class="setup-card book-detail-card"><button type="button" class="modal-close-btn" data-action="close-book-detail" aria-label="Close book details">×</button><img id="bookDetailCover" class="book-detail-cover" alt="" hidden><div id="bookDetailPlaceholder" class="book-detail-cover-placeholder"></div><div class="book-detail-content"><button type="button" class="profile-link" id="bookDetailProfile"></button><h3 id="bookDetailTitle"></h3><p id="bookDetailAuthor" class="author"></p><p id="bookDetailWhy"></p><p id="bookDetailMeta"></p><div class="book-detail-comments"><h4>Club discussion</h4><div class="comment-list" id="bookDetailComments"></div><form class="comment-form" id="bookDetailCommentForm"><input type="text" name="comment-name" placeholder="Your name" maxlength="60" required><input type="text" name="comment-text" placeholder="Add a comment…" maxlength="500" required><button type="submit">Post</button></form></div></div></div>
-  </div>
-
-  <div class="setup-modal" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileName" hidden>
-    <div class="setup-card profile-card">
-      <button type="button" class="modal-close-btn" data-action="close-profile" aria-label="Close profile">×</button>
-      <aside class="profile-identity">
-        <div class="profile-hero"><img id="profilePhoto" class="profile-photo" alt="" hidden><div id="profileInitial" class="profile-initial"></div><div><p class="profile-label">MEMBER LIBRARY</p><h3 id="profileName"></h3><p id="profileBio" class="profile-bio" hidden></p><p id="profileJoined" class="hint"></p></div></div>
-        <div class="profile-stats" id="profileStats" aria-label="Reading statistics"></div>
-        <div class="profile-edit" id="profileEdit" hidden><label for="profileNameInput">Display name</label><input id="profileNameInput" maxlength="60"><label for="profileBioInput">Short bio</label><input id="profileBioInput" maxlength="80" placeholder="A little about your reading taste"><fieldset class="color-picker"><legend>Library accent</legend><div id="profileSwatches"></div><label class="custom-color">Custom <input id="profileColorInput" type="color" value="#e8623d"></label></fieldset><button type="button" data-action="save-profile" class="setup-link-btn">Save profile</button></div>
-      </aside>
-      <section class="profile-library" aria-label="Personal shelf">
-        <div class="profile-shelf-head"><div><p class="profile-label">ON THE SHELF</p><h4 id="profileShelfTitle">Their shelf</h4></div><span id="profileShelfCount" class="shelf-count"></span></div>
-        <div class="profile-shelf" id="profileBooks"></div>
-        <form id="personalShelfForm" class="personal-shelf-form" hidden><h4>Add to my shelf</h4><div class="personal-fields"><input name="shelf-title" maxlength="160" placeholder="Book title" required><input name="shelf-author" maxlength="100" placeholder="Author" required><input name="shelf-cover" type="url" maxlength="500" placeholder="Cover image URL (optional)"><select name="shelf-status"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></div><textarea name="shelf-note" maxlength="280" placeholder="A tiny note, review, or memory (optional)"></textarea><button type="submit">Add to my shelf</button></form>
-      </section>
-    </div>
-  </div>
-
-  <div class="setup-modal" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle" hidden><div class="setup-card review-card"><button type="button" class="modal-close-btn" data-action="close-review" aria-label="Close review queue">×</button><h3 id="reviewTitle">Suggestion review</h3><div id="pendingList"></div></div></div>
-  <button type="button" class="officer-tools-trigger" id="officerToolsButton" data-action="open-officer-tools" hidden>Officer tools</button>
-  <aside class="officer-sidebar" id="officerSidebar" aria-label="Officer tools" hidden>
-    <div class="officer-sidebar-head"><h2>Officer tools</h2><button type="button" class="modal-close-btn" data-action="close-officer-tools" aria-label="Close officer tools">×</button></div>
-    <button type="button" data-action="open-review" class="sidebar-action">Review suggestions</button>
-    <section class="manage-members"><h3>Manage members</h3><p class="hint">Add an email before someone signs in. You can remove an unused invitation below.</p><form id="inviteForm"><label for="inviteEmail">Invite email</label><div><input type="email" id="inviteEmail" required placeholder="member@example.com"><button type="submit">Add</button></div></form><p id="inviteStatus" class="hint"></p><h4>Invited, not joined</h4><div id="invitedList" class="member-list"></div><h4>Members</h4><div id="memberList" class="member-list"></div></section>
-  </aside>
-  <script type="module" src="app.js?v=20260813-bootfix"></script>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js?v=2"></script>
 </body>
 </html>
