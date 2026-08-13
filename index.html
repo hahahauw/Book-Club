@@ -45,6 +45,7 @@
         <button type="button" class="text-link-btn" data-action="show-profile" id="memberProfile" hidden>My shelf</button>
         <button type="button" class="text-link-btn" data-action="sign-out" id="memberSignOut" hidden>Sign out</button>
       </div>
+      <p class="member-note">Library cards are for invited club members. Visitors are welcome to explore.</p>
     </header>
 
     <section class="reveal" style="--tilt: -1deg;">
@@ -71,6 +72,15 @@
       </div>
     </section>
 
+    <section class="reveal" style="--tilt: .2deg;">
+      <div class="section-head"><span class="section-num">02</span><h2>Book of the Month</h2><span class="section-rule"></span></div>
+      <div class="card book-month-card">
+        <div id="bookMonthFeature" class="book-month-feature"><div class="book-month-placeholder">The next club read is being chosen.</div></div>
+        <div class="book-month-community"><div class="book-month-stats"><span id="bookMonthAverage">No ratings yet</span><span id="bookMonthProgress">0% finished</span></div><p id="bookMonthPrompt" class="hint">When the club chooses a book, you can share a star rating and a thought here.</p><form id="bookMonthRatingForm" class="book-month-form"><label for="bookMonthStars">Your rating</label><select id="bookMonthStars" name="stars"><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Not for me</option><option value="1">★☆☆☆☆ — Finished it</option></select><label class="month-finished"><input type="checkbox" id="bookMonthFinished" name="finished"> I finished this month’s read</label><textarea id="bookMonthComment" name="comment" maxlength="280" placeholder="A thought for the club discussion (optional)"></textarea><button type="submit">Save my reading update</button></form><p id="bookMonthStatus" class="hint"></p><div id="bookMonthComments" class="month-comments"></div></div>
+        <div id="bookMonthOfficer" class="officer-editor book-month-officer" hidden><label for="bookMonthSelect">Choose from the member bookshelf</label><select id="bookMonthSelect"></select><label for="bookMonthLabel">Month label</label><input id="bookMonthLabel" maxlength="40" placeholder="e.g., August 2026"><button type="button" class="setup-link-btn" data-action="save-book-month">Set Book of the Month</button></div>
+      </div>
+    </section>
+
     <section class="reveal" style="--tilt: .8deg;">
       <div class="section-head"><span class="section-num">02</span><h2>The Member Bookshelf</h2><span class="section-rule"></span></div>
       <div class="shelf-tools"><label class="sr-only" for="bookSearch">Search the member bookshelf</label><input type="search" id="bookSearch" placeholder="Search title, author, or genre"><label class="sr-only" for="genreFilter">Filter by genre</label><select id="genreFilter"><option value="">All genres</option></select></div>
@@ -91,6 +101,16 @@
     <section class="reveal" style="--tilt: -.5deg;">
       <div class="section-head"><span class="section-num">05</span><h2>The Pin Board</h2><span class="section-rule"></span></div>
       <div class="card"><p class="section-sub">A small place for quotes, reactions, and reading thoughts.</p><form id="boardForm" class="board-form"><textarea id="boardText" maxlength="280" placeholder="Leave a note for the club…" required></textarea><button type="submit">Pin note</button></form><p id="boardStatus" class="hint"></p><div class="pin-board" id="pinBoard"><div class="no-comments">Loading notes…</div></div></div>
+    </section>
+
+    <section class="reveal" style="--tilt: .1deg;">
+      <div class="section-head"><span class="section-num">06</span><h2>Upcoming Events</h2><span class="section-rule"></span></div>
+      <div class="card"><div id="eventsList" class="events-list"><p class="hint">Loading upcoming events…</p></div><form id="eventForm" class="officer-editor event-form" hidden><label for="eventTitle">Event title</label><input id="eventTitle" maxlength="100" required placeholder="e.g., Silent Reading Session"><label for="eventDate">Date</label><input id="eventDate" type="date" required><label for="eventDetails">Details (optional)</label><input id="eventDetails" maxlength="180" placeholder="Location, time, or a short note"><button type="submit" class="setup-link-btn">Add event</button></form></div>
+    </section>
+
+    <section class="reveal" style="--tilt: -.2deg;">
+      <div class="section-head"><span class="section-num">07</span><h2>Reading Memories</h2><span class="section-rule"></span></div>
+      <p class="section-sub">Book discussions, library days, book fairs, and all the little moments in between.</p><div id="memoriesGallery" class="memories-gallery"><p class="hint">Loading memories…</p></div><form id="memoryForm" class="officer-editor memory-form" hidden><label for="memoryImageUrl">Photo URL</label><input id="memoryImageUrl" type="url" maxlength="500" required placeholder="Paste a hosted image link"><label for="memoryTitle">Caption</label><input id="memoryTitle" maxlength="100" required placeholder="e.g., Book fair afternoon"><label for="memoryCategory">Category</label><input id="memoryCategory" maxlength="50" placeholder="e.g., Library meeting"><button type="submit" class="setup-link-btn">Add memory</button></form>
     </section>
 
     <section class="reveal" id="memberDirectorySection" style="--tilt: .3deg;">

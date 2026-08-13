@@ -1,11 +1,11 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc,
   updateDoc, setDoc, getDoc, deleteDoc, writeBatch, arrayUnion
-} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import {
   getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
-} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA-G9WsH-sMdTzXvylNSJ1b-l5XkjBEol4",
@@ -39,6 +39,10 @@ const state = {
   user: null,
   member: null,
   currentPickId: null,
+  bookMonth: null,
+  bookMonthRatings: [],
+  events: [],
+  memories: [],
   pendingBooks: [],
   announcement: "",
   unsubscribePendingBooks: null,
@@ -49,6 +53,7 @@ const state = {
   unsubscribeOwnMember: null,
   profileShelfEntries: [],
   unsubscribeProfileShelf: null
+  ,unsubscribeBookMonthRatings: null
 };
 
 const elements = {
@@ -74,6 +79,14 @@ const elements = {
   invitedList: document.getElementById("invitedList"), memberList: document.getElementById("memberList"),
   pendingList: document.getElementById("pendingList"), memberDirectory: document.getElementById("memberDirectory"),
   personalShelfForm: document.getElementById("personalShelfForm"), profileStats: document.getElementById("profileStats")
+  ,bookMonthFeature: document.getElementById("bookMonthFeature"), bookMonthAverage: document.getElementById("bookMonthAverage"),
+  bookMonthProgress: document.getElementById("bookMonthProgress"), bookMonthPrompt: document.getElementById("bookMonthPrompt"),
+  bookMonthRatingForm: document.getElementById("bookMonthRatingForm"), bookMonthStars: document.getElementById("bookMonthStars"),
+  bookMonthFinished: document.getElementById("bookMonthFinished"), bookMonthComment: document.getElementById("bookMonthComment"),
+  bookMonthStatus: document.getElementById("bookMonthStatus"), bookMonthComments: document.getElementById("bookMonthComments"),
+  bookMonthOfficer: document.getElementById("bookMonthOfficer"), bookMonthSelect: document.getElementById("bookMonthSelect"), bookMonthLabel: document.getElementById("bookMonthLabel"),
+  eventsList: document.getElementById("eventsList"), eventForm: document.getElementById("eventForm"), eventTitle: document.getElementById("eventTitle"), eventDate: document.getElementById("eventDate"), eventDetails: document.getElementById("eventDetails"),
+  memoriesGallery: document.getElementById("memoriesGallery"), memoryForm: document.getElementById("memoryForm"), memoryImageUrl: document.getElementById("memoryImageUrl"), memoryTitle: document.getElementById("memoryTitle"), memoryCategory: document.getElementById("memoryCategory")
 };
 
 function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value || ""); return node.innerHTML; }
@@ -141,6 +154,9 @@ function updateMemberUi() {
   elements.memberProfile.hidden = !member;
   elements.memberSignOut.hidden = !member;
   elements.officerPicker.hidden = !isOfficer();
+  elements.bookMonthOfficer.hidden = !isOfficer();
+  elements.eventForm.hidden = !isOfficer();
+  elements.memoryForm.hidden = !isOfficer();
   elements.announcementEditor.hidden = !isOfficer();
   elements.officerToolsButton.hidden = !isOfficer();
   if (isOfficer()) elements.announcementInput.value = state.announcement;
@@ -223,6 +239,45 @@ function renderBooks() {
   elements.loadMoreBooks.hidden = state.visibleBooks >= books.length;
   populateGenreFilter();
   populateCurrentPickOptions();
+  populateBookMonthOptions();
+}
+function populateBookMonthOptions() {
+  if (!elements.bookMonthSelect) return;
+  elements.bookMonthSelect.innerHTML = '<option value="">Choose a member recommendation…</option>' + state.books.map((book) => `<option value="${book.id}" ${book.id === state.bookMonth?.bookId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
+}
+function renderBookMonth() {
+  const book = state.books.find((item) => item.id === state.bookMonth?.bookId);
+  const ratings = state.bookMonthRatings; const totalMembers = Math.max(state.members.length, 1);
+  const finished = ratings.filter((rating) => rating.finished).length;
+  const average = ratings.length ? (ratings.reduce((sum, rating) => sum + Number(rating.stars || 0), 0) / ratings.length).toFixed(1) : null;
+  elements.bookMonthAverage.textContent = average ? `${"★".repeat(Math.round(average))} ${average}/5` : "No ratings yet";
+  elements.bookMonthProgress.textContent = `${Math.round((finished / totalMembers) * 100)}% finished`;
+  elements.bookMonthFeature.innerHTML = book ? `<div class="book-month-cover">${book.coverUrl ? `<img src="${escapeHtml(book.coverUrl)}" alt="Cover of ${escapeHtml(book.title)}">` : `<span>${escapeHtml(book.title)}</span>`}</div><div><p class="section-kicker">${escapeHtml(state.bookMonth.label || "This month’s club read")}</p><h3>${escapeHtml(book.title)}</h3><p class="author">by ${escapeHtml(book.author)}</p><p>${escapeHtml(book.why || "Read along at your own pace, then leave a rating or discussion note.")}</p></div>` : '<div class="book-month-placeholder">The next club read is being chosen.</div>';
+  elements.bookMonthPrompt.textContent = book ? `Finished readers: ${finished} of ${state.members.length || 0}. Add your own update whenever you are ready.` : "When the club chooses a book, you can share a star rating and a thought here.";
+  elements.bookMonthRatingForm.hidden = !book;
+  const ownRating = ratings.find((rating) => rating.memberId === state.user?.uid);
+  if (ownRating) { elements.bookMonthStars.value = String(ownRating.stars || 5); elements.bookMonthFinished.checked = Boolean(ownRating.finished); elements.bookMonthComment.value = ownRating.comment || ""; }
+  else { elements.bookMonthRatingForm.reset(); }
+  elements.bookMonthComments.innerHTML = ratings.filter((rating) => rating.comment).length ? ratings.filter((rating) => rating.comment).map((rating) => `<article class="month-comment"><strong>${escapeHtml(rating.displayName || "Member")}</strong><span>${"★".repeat(Number(rating.stars || 0))}</span><p>${escapeHtml(rating.comment)}</p></article>`).join("") : '<p class="hint">No discussion notes yet. Be the first to leave one.</p>';
+  populateBookMonthOptions();
+}
+function subscribeBookMonthRatings(bookId) {
+  state.unsubscribeBookMonthRatings?.(); state.bookMonthRatings = []; renderBookMonth();
+  if (!bookId) return;
+  state.unsubscribeBookMonthRatings = onSnapshot(collection(db, "bookOfMonthRatings", bookId, "members"), (snapshot) => { state.bookMonthRatings = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderBookMonth(); }, (error) => { console.error("Book of the Month ratings error:", error); elements.bookMonthComments.innerHTML = '<p class="hint">Ratings are unavailable right now.</p>'; });
+}
+async function saveBookMonthRating(event) {
+  event.preventDefault(); const bookId = state.bookMonth?.bookId;
+  if (!bookId) return; if (!isMember()) { elements.bookMonthStatus.textContent = "Only invited club members can save a reading update."; return; }
+  const button = elements.bookMonthRatingForm.querySelector("button"); button.disabled = true;
+  try { await setDoc(doc(db, "bookOfMonthRatings", bookId, "members", state.user.uid), { memberId: state.user.uid, displayName: state.member.displayName, stars: Number(elements.bookMonthStars.value), finished: elements.bookMonthFinished.checked, comment: elements.bookMonthComment.value.trim(), updatedAt: new Date().toISOString() }); elements.bookMonthStatus.textContent = "Your reading update is saved."; }
+  catch (error) { console.error(error); elements.bookMonthStatus.textContent = "Could not save your reading update."; }
+  finally { button.disabled = false; }
+}
+async function saveBookMonth() {
+  if (!isOfficer() || !elements.bookMonthSelect.value) return;
+  try { await setDoc(doc(db, "siteSettings", "bookOfMonth"), { bookId: elements.bookMonthSelect.value, label: elements.bookMonthLabel.value.trim(), updatedAt: new Date().toISOString() }); showMessage("Book of the Month updated."); }
+  catch (error) { console.error(error); showMessage("Could not update Book of the Month.", "error"); }
 }
 function populateCurrentPickOptions() { elements.currentPickSelect.innerHTML = '<option value="">Choose a recommendation…</option>' + state.books.map((book) => `<option value="${book.id}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join(""); renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); }
 function renderCurrentPick(book) { const covered = Boolean(book?.coverUrl); elements.currentPickCover.hidden = !covered; elements.currentPickPlaceholder.hidden = covered; if (covered) elements.currentPickCover.src = book.coverUrl; elements.currentPickPlaceholder.querySelector("span").innerHTML = book ? escapeHtml(book.title).replace(/ /g, "<br>") : "Your First<br>Book Here"; elements.currentPickTitle.textContent = book?.title || "The Current Pick"; elements.currentPickAuthor.textContent = book ? `by ${book.author}` : "Choose a book from the shelf"; elements.currentPickDescription.textContent = book?.why || "When officers select a member recommendation, it will become the club’s Current Pick right here."; elements.currentPickMeta.textContent = book ? `Recommended by ${book.name}${book.genre ? ` · ${book.genre}` : ""}` : "Waiting for the next read"; }
@@ -421,13 +476,37 @@ async function removePin(id) {
   try { await deleteDoc(doc(db, "boardPosts", id)); }
   catch (error) { console.error(error); showMessage("Could not remove that pin.", "error"); }
 }
+function formatEventDate(value) { const date = new Date(`${value}T12:00:00`); return Number.isNaN(date.valueOf()) ? "Date to be announced" : date.toLocaleDateString(undefined, { month: "long", day: "numeric" }); }
+function renderEvents() {
+  elements.eventsList.innerHTML = state.events.length ? state.events.map((event) => `<article class="event-item"><time datetime="${escapeHtml(event.date)}">${escapeHtml(formatEventDate(event.date))}</time><div><h3>${escapeHtml(event.title)}</h3>${event.details ? `<p>${escapeHtml(event.details)}</p>` : ""}</div>${isOfficer() ? `<button type="button" class="text-link-btn" data-action="remove-event" data-id="${event.id}">Remove</button>` : ""}</article>`).join("") : '<p class="hint">No events have been added yet. Check back soon.</p>';
+}
+async function addEvent(event) {
+  event.preventDefault(); if (!isOfficer()) return;
+  const title = elements.eventTitle.value.trim(), date = elements.eventDate.value, details = elements.eventDetails.value.trim(); if (!title || !date) return;
+  try { await addDoc(collection(db, "events"), { title, date, details, createdAt: new Date().toISOString() }); elements.eventForm.reset(); showMessage("Event added."); }
+  catch (error) { console.error(error); showMessage("Could not add that event.", "error"); }
+}
+async function removeEvent(id) { if (!isOfficer() || !id) return; try { await deleteDoc(doc(db, "events", id)); } catch (error) { console.error(error); showMessage("Could not remove that event.", "error"); } }
+function renderMemories() {
+  elements.memoriesGallery.innerHTML = state.memories.length ? state.memories.map((memory) => `<article class="memory-card"><img src="${escapeHtml(memory.imageUrl)}" alt="${escapeHtml(memory.title)}" loading="lazy"><div><span>${escapeHtml(memory.category || "Club memory")}</span><h3>${escapeHtml(memory.title)}</h3></div>${isOfficer() ? `<button type="button" class="remove-memory" data-action="remove-memory" data-id="${memory.id}" aria-label="Remove ${escapeHtml(memory.title)}">×</button>` : ""}</article>`).join("") : '<p class="hint">The club’s first reading memory will appear here soon.</p>';
+}
+async function addMemory(event) {
+  event.preventDefault(); if (!isOfficer()) return;
+  const imageUrl = elements.memoryImageUrl.value.trim(), title = elements.memoryTitle.value.trim(), category = elements.memoryCategory.value.trim(); if (!imageUrl || !title) return;
+  try { await addDoc(collection(db, "memories"), { imageUrl, title, category, date: new Date().toISOString() }); elements.memoryForm.reset(); showMessage("Reading memory added."); }
+  catch (error) { console.error(error); showMessage("Could not add that memory.", "error"); }
+}
+async function removeMemory(id) { if (!isOfficer() || !id) return; try { await deleteDoc(doc(db, "memories", id)); } catch (error) { console.error(error); showMessage("Could not remove that memory.", "error"); } }
 
 // ====== REALTIME LISTENERS ======
-onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberDirectory(); renderMemberManagement(); }, (error) => { console.error("Member directory error:", error); elements.memberDirectory.innerHTML = '<div class="no-comments">Member profiles are unavailable right now.</div>'; });
+onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberDirectory(); renderMemberManagement(); renderBookMonth(); }, (error) => { console.error("Member directory error:", error); elements.memberDirectory.innerHTML = '<div class="no-comments">Member profiles are unavailable right now.</div>'; });
 onSnapshot(query(booksCollection, orderBy("date", "desc")), (snapshot) => { state.books = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderBooks(); }, (error) => { console.error(error); elements.bookshelf.innerHTML = '<div class="empty-shelf">Couldn’t load the shelf right now.</div>'; });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { state.currentPickId = snapshot.data()?.bookId || null; renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); });
+onSnapshot(doc(db, "siteSettings", "bookOfMonth"), (snapshot) => { state.bookMonth = snapshot.exists() ? snapshot.data() : null; elements.bookMonthLabel.value = state.bookMonth?.label || ""; subscribeBookMonthRatings(state.bookMonth?.bookId); renderBookMonth(); }, (error) => { console.error("Book of the Month error:", error); elements.bookMonthFeature.innerHTML = '<p class="hint">Book of the Month is unavailable right now.</p>'; });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; elements.announcementText.textContent = state.announcement || "No announcements yet—check back soon."; if (isOfficer()) elements.announcementInput.value = state.announcement; });
 onSnapshot(query(collection(db, "boardPosts"), orderBy("date", "desc")), (snapshot) => renderBoard(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), (error) => { console.error(error); elements.pinBoard.innerHTML = '<div class="no-comments">The pin board is taking a small break.</div>'; });
+onSnapshot(query(collection(db, "events"), orderBy("date", "asc")), (snapshot) => { state.events = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderEvents(); }, (error) => { console.error("Events error:", error); elements.eventsList.innerHTML = '<p class="hint">Events are unavailable right now.</p>'; });
+onSnapshot(query(collection(db, "memories"), orderBy("date", "desc")), (snapshot) => { state.memories = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemories(); }, (error) => { console.error("Memories error:", error); elements.memoriesGallery.innerHTML = '<p class="hint">Reading memories are unavailable right now.</p>'; });
 
 // ====== EVENTS ======
 document.addEventListener("click", (event) => {
@@ -438,10 +517,12 @@ document.addEventListener("click", (event) => {
   if (action === "open-suggestion") showModal(elements.suggestionModal); if (action === "close-suggestion") closeModal(elements.suggestionModal);
   if (action === "close-book-detail") closeModal(elements.bookDetailModal); if (action === "close-profile") { closeModal(elements.profileModal); state.unsubscribeProfileShelf?.(); state.unsubscribeProfileShelf = null; } if (action === "close-review") closeModal(elements.reviewModal);
   if (action === "save-current-pick") { if (isOfficer() && elements.currentPickSelect.value) setDoc(doc(db, "siteSettings", "currentPick"), { bookId: elements.currentPickSelect.value, updatedAt: new Date().toISOString() }); }
+  if (action === "save-book-month") saveBookMonth();
   if (action === "save-announcement") saveAnnouncement(); if (action === "open-review" && isOfficer()) showModal(elements.reviewModal);
   if (action === "open-officer-tools" && isOfficer()) showModal(elements.officerSidebar); if (action === "close-officer-tools") closeModal(elements.officerSidebar);
   if (action === "approve-pending") reviewPending(target.dataset.id, true); if (action === "reject-pending") reviewPending(target.dataset.id, false);
   if (action === "revoke-invite") revokeInvite(target.dataset.email); if (action === "remove-pin") removePin(target.dataset.id);
+  if (action === "remove-event") removeEvent(target.dataset.id); if (action === "remove-memory") removeMemory(target.dataset.id);
   if (action === "toggle-role") toggleMemberRole(target.dataset.uid);
   if (action === "edit-shelf-book") editPersonalShelfEntry(target.dataset.entryId);
   if (action === "remove-shelf-book" && state.user?.uid === elements.profileModal.dataset.memberId) deleteDoc(doc(db, "memberShelves", state.user.uid, "entries", target.dataset.entryId));
@@ -467,6 +548,9 @@ elements.coverUpload.addEventListener("change", (event) => { if (event.target.fi
 elements.form.addEventListener("submit", submitSuggestion); elements.boardForm.addEventListener("submit", postBoard);
 elements.inviteForm.addEventListener("submit", addInvite);
 elements.personalShelfForm.addEventListener("submit", addPersonalShelfEntry);
+elements.bookMonthRatingForm.addEventListener("submit", saveBookMonthRating);
+elements.eventForm.addEventListener("submit", addEvent);
+elements.memoryForm.addEventListener("submit", addMemory);
 elements.loadMoreBooks.addEventListener("click", () => { state.visibleBooks += BOOKS_PER_PAGE; renderBooks(); });
 elements.bookSearch?.addEventListener("input", (event) => { state.bookSearch = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
 elements.genreFilter?.addEventListener("change", (event) => { state.genreFilter = event.target.value; state.visibleBooks = BOOKS_PER_PAGE; renderBooks(); });
