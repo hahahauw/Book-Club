@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Caveat:wght@500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260813-bootfix">
 </head>
 <body>
   <div class="setup-modal" id="setupModal" hidden>
@@ -49,7 +49,7 @@
     </header>
 
     <section class="reveal" style="--tilt: -1deg;">
-      <div class="section-head"><span class="section-num">01</span><h2>What We're Reading</h2><span class="section-rule"></span></div>
+      <div class="section-head"><span class="section-num">01</span><h2>Book of the Month</h2><span class="section-rule"></span></div>
       <div class="card due-card">
         <div class="due-card-inner">
           <img class="book-cover-img" id="currentPickCover" alt="Cover of the current pick" hidden>
@@ -62,8 +62,8 @@
             <span class="due-stamp"><span class="dot"></span> <span id="currentPickMeta">Waiting for the next read</span></span>
             <div class="officer-controls">
               <div id="officerPicker" hidden>
-                <label for="currentPickSelect">Choose from the shelf</label>
-                <div class="officer-picker-row"><select id="currentPickSelect"></select><button type="button" data-action="save-current-pick" class="setup-link-btn">Feature this book</button></div>
+                <label for="currentPickSelect">Choose the Book of the Month</label>
+                <div class="officer-picker-row"><select id="currentPickSelect"></select><button type="button" data-action="save-current-pick" class="setup-link-btn">Set Book of the Month</button></div>
               </div>
               <p class="officer-status" id="officerStatus" aria-live="polite"></p>
             </div>
@@ -73,7 +73,7 @@
     </section>
 
     <section class="reveal" style="--tilt: .2deg;">
-      <div class="section-head"><span class="section-num">02</span><h2>Book of the Month</h2><span class="section-rule"></span></div>
+      <div class="section-head"><span class="section-num">02</span><h2>Reading Updates</h2><span class="section-rule"></span></div>
       <div class="card book-month-card">
         <div id="bookMonthFeature" class="book-month-feature"><div class="book-month-placeholder">The next club read is being chosen.</div></div>
         <div class="book-month-community"><div class="book-month-stats"><span id="bookMonthAverage">No ratings yet</span><span id="bookMonthProgress">0% finished</span></div><p id="bookMonthPrompt" class="hint">When the club chooses a book, you can share a star rating and a thought here.</p><form id="bookMonthRatingForm" class="book-month-form"><label for="bookMonthStars">Your rating</label><select id="bookMonthStars" name="stars"><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Not for me</option><option value="1">★☆☆☆☆ — Finished it</option></select><label class="month-finished"><input type="checkbox" id="bookMonthFinished" name="finished"> I finished this month’s read</label><textarea id="bookMonthComment" name="comment" maxlength="280" placeholder="A thought for the club discussion (optional)"></textarea><button type="submit">Save my reading update</button></form><p id="bookMonthStatus" class="hint"></p><div id="bookMonthComments" class="month-comments"></div></div>
@@ -168,6 +168,6 @@
     <button type="button" data-action="open-review" class="sidebar-action">Review suggestions</button>
     <section class="manage-members"><h3>Manage members</h3><p class="hint">Add an email before someone signs in. You can remove an unused invitation below.</p><form id="inviteForm"><label for="inviteEmail">Invite email</label><div><input type="email" id="inviteEmail" required placeholder="member@example.com"><button type="submit">Add</button></div></form><p id="inviteStatus" class="hint"></p><h4>Invited, not joined</h4><div id="invitedList" class="member-list"></div><h4>Members</h4><div id="memberList" class="member-list"></div></section>
   </aside>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=20260813-bootfix"></script>
 </body>
 </html>

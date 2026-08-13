@@ -154,7 +154,7 @@ function updateMemberUi() {
   elements.memberProfile.hidden = !member;
   elements.memberSignOut.hidden = !member;
   elements.officerPicker.hidden = !isOfficer();
-  elements.bookMonthOfficer.hidden = !isOfficer();
+  elements.bookMonthOfficer.hidden = true;
   elements.eventForm.hidden = !isOfficer();
   elements.memoryForm.hidden = !isOfficer();
   elements.announcementEditor.hidden = !isOfficer();
@@ -276,7 +276,7 @@ async function saveBookMonthRating(event) {
 }
 async function saveBookMonth() {
   if (!isOfficer() || !elements.bookMonthSelect.value) return;
-  try { await setDoc(doc(db, "siteSettings", "bookOfMonth"), { bookId: elements.bookMonthSelect.value, label: elements.bookMonthLabel.value.trim(), updatedAt: new Date().toISOString() }); showMessage("Book of the Month updated."); }
+  try { await setDoc(doc(db, "siteSettings", "currentPick"), { bookId: elements.bookMonthSelect.value, label: elements.bookMonthLabel.value.trim(), updatedAt: new Date().toISOString() }); showMessage("Book of the Month updated."); }
   catch (error) { console.error(error); showMessage("Could not update Book of the Month.", "error"); }
 }
 function populateCurrentPickOptions() { elements.currentPickSelect.innerHTML = '<option value="">Choose a recommendation…</option>' + state.books.map((book) => `<option value="${book.id}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join(""); renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); }
@@ -502,7 +502,7 @@ async function removeMemory(id) { if (!isOfficer() || !id) return; try { await d
 onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderMemberDirectory(); renderMemberManagement(); renderBookMonth(); }, (error) => { console.error("Member directory error:", error); elements.memberDirectory.innerHTML = '<div class="no-comments">Member profiles are unavailable right now.</div>'; });
 onSnapshot(query(booksCollection, orderBy("date", "desc")), (snapshot) => { state.books = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderBooks(); }, (error) => { console.error(error); elements.bookshelf.innerHTML = '<div class="empty-shelf">Couldn’t load the shelf right now.</div>'; });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { state.currentPickId = snapshot.data()?.bookId || null; renderCurrentPick(state.books.find((book) => book.id === state.currentPickId)); });
-onSnapshot(doc(db, "siteSettings", "bookOfMonth"), (snapshot) => { state.bookMonth = snapshot.exists() ? snapshot.data() : null; elements.bookMonthLabel.value = state.bookMonth?.label || ""; subscribeBookMonthRatings(state.bookMonth?.bookId); renderBookMonth(); }, (error) => { console.error("Book of the Month error:", error); elements.bookMonthFeature.innerHTML = '<p class="hint">Book of the Month is unavailable right now.</p>'; });
+onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { state.bookMonth = snapshot.exists() ? snapshot.data() : null; elements.bookMonthLabel.value = state.bookMonth?.label || ""; subscribeBookMonthRatings(state.bookMonth?.bookId); renderBookMonth(); }, (error) => { console.error("Book of the Month error:", error); elements.bookMonthFeature.innerHTML = '<p class="hint">Book of the Month is unavailable right now.</p>'; });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; elements.announcementText.textContent = state.announcement || "No announcements yet—check back soon."; if (isOfficer()) elements.announcementInput.value = state.announcement; });
 onSnapshot(query(collection(db, "boardPosts"), orderBy("date", "desc")), (snapshot) => renderBoard(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), (error) => { console.error(error); elements.pinBoard.innerHTML = '<div class="no-comments">The pin board is taking a small break.</div>'; });
 onSnapshot(query(collection(db, "events"), orderBy("date", "asc")), (snapshot) => { state.events = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })); renderEvents(); }, (error) => { console.error("Events error:", error); elements.eventsList.innerHTML = '<p class="hint">Events are unavailable right now.</p>'; });
@@ -516,7 +516,7 @@ document.addEventListener("click", (event) => {
   if (action === "show-setup") showSetup(); if (action === "close-setup") closeSetup(); if (action === "save-cloudinary") saveUploadProvider("cloudinary"); if (action === "save-imgbb") saveUploadProvider("imgbb");
   if (action === "open-suggestion") showModal(elements.suggestionModal); if (action === "close-suggestion") closeModal(elements.suggestionModal);
   if (action === "close-book-detail") closeModal(elements.bookDetailModal); if (action === "close-profile") { closeModal(elements.profileModal); state.unsubscribeProfileShelf?.(); state.unsubscribeProfileShelf = null; } if (action === "close-review") closeModal(elements.reviewModal);
-  if (action === "save-current-pick") { if (isOfficer() && elements.currentPickSelect.value) setDoc(doc(db, "siteSettings", "currentPick"), { bookId: elements.currentPickSelect.value, updatedAt: new Date().toISOString() }); }
+  if (action === "save-current-pick") { if (isOfficer() && elements.currentPickSelect.value) setDoc(doc(db, "siteSettings", "currentPick"), { bookId: elements.currentPickSelect.value, updatedAt: new Date().toISOString() }, { merge: true }); }
   if (action === "save-book-month") saveBookMonth();
   if (action === "save-announcement") saveAnnouncement(); if (action === "open-review" && isOfficer()) showModal(elements.reviewModal);
   if (action === "open-officer-tools" && isOfficer()) showModal(elements.officerSidebar); if (action === "close-officer-tools") closeModal(elements.officerSidebar);
