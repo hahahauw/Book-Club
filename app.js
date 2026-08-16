@@ -22,7 +22,7 @@ const ui = {
   boardForm: $("boardForm"), boardText: $("boardText"), boardStatus: $("boardStatus"), boardGuestHint: $("boardGuestHint"), pinBoard: $("pinBoard"),
   memories: $("memoriesGrid"), memoryForm: $("memoryForm"), memoryImage: $("memoryImage"), memoryFile: $("memoryFile"), memoryCaption: $("memoryCaption"), memoryCategory: $("memoryCategory"), inviteForm: $("inviteForm"), inviteEmail: $("inviteEmail"),
   uploadSettingsForm: $("uploadSettingsForm"), cloudName: $("cloudName"), uploadPreset: $("uploadPreset"), googleBooksKey: $("googleBooksKey"), uploadSettingsStatus: $("uploadSettingsStatus"), suggestionHint: $("suggestionHint"),
-  members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestination: $("catalogDestination"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
+  members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
 };
 
 const state = { user: null, profile: null, books: [], members: [], pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", events: [], memories: [], boardPosts: [], shelfEntries: [], search: "", genre: "", openProfileId: null, stopRatings: null, stopMonthReasons: null, stopShelf: null, stopPending: null, lastDialogTrigger: null, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "" };
@@ -51,7 +51,7 @@ function toast(message) {
 function showDialog(dialog, focusTarget) { state.lastDialogTrigger = document.activeElement; dialog.showModal(); requestAnimationFrame(() => (focusTarget || dialog.querySelector("input,select,textarea,button"))?.focus()); }
 function closeDialog(dialog) { if (!dialog?.open) return; dialog.close(); const trigger = state.lastDialogTrigger; state.lastDialogTrigger = null; if (trigger?.isConnected) requestAnimationFrame(() => trigger.focus()); }
 async function runBusy(button, busyText, action) { if (!button || button.disabled) return; const label = button.textContent; button.disabled = true; if (busyText) button.textContent = busyText; try { return await action(); } finally { button.disabled = false; button.textContent = label; } }
-function setAuthUi() { const name = state.profile?.displayName || state.user?.displayName || "reader"; ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest"; ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember(); ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Guests can send a manual suggestion for officer review. Sign in to use automatic search."; if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; } syncPendingSubscription(); renderMonth(); renderEvents(); renderMemories(); renderBoard(); renderPending(); }
+function setAuthUi() { const name = state.profile?.displayName || state.user?.displayName || "reader"; ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest"; ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember(); ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review."; if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; } syncPendingSubscription(); renderMonth(); renderEvents(); renderMemories(); renderBoard(); renderPending(); }
 
 function optimizedImageUrl(url, width = 600) {
   const value = String(url || "");
@@ -96,7 +96,7 @@ async function reviewPending(id, approve) {
         if (String(pending.why || "").trim()) await updateDoc(doc(db, "books", existing.id), { comments: arrayUnion({ name: pending.name || "Guest reader", text: String(pending.why).trim().slice(0, 500), date: new Date().toISOString() }) });
         toast(existing && pending.why ? "Added the guest’s note to the existing book discussion." : "That book was already on the shelf, so no duplicate was created.");
       } else {
-        await addDoc(collection(db, "books"), { name: pending.name || "Guest reader", memberName: pending.name || "Guest reader", title: pending.title || "Untitled book", author: pending.author || "Unknown author", genre: pending.genre || "", coverUrl: pending.coverUrl || "", why: pending.why || "", synopsis: pending.synopsis || "", date: pending.date || new Date().toISOString(), comments: [] });
+        await addDoc(collection(db, "books"), { name: pending.name || "Guest reader", memberName: pending.name || "Guest reader", title: pending.title || "Untitled book", author: pending.author || "Unknown author", genre: pending.genre || "", coverUrl: pending.coverUrl || "", why: pending.why || "", synopsis: pending.synopsis || "", catalogKey: pending.catalogKey || "", catalogId: pending.catalogId || "", openLibraryKey: pending.openLibraryKey || "", googleBooksId: pending.googleBooksId || "", isbn: pending.isbn || "", publicationYear: String(pending.publicationYear || ""), source: pending.source || "", date: pending.date || new Date().toISOString(), comments: [] });
         toast("Guest suggestion approved and added to the shelf.");
       }
     }
@@ -183,15 +183,15 @@ function prepareSuggestionForm() { ensureSuggestionUpload(); const signedMember 
 
 function catalogCover(book, className) { return book.coverUrl ? `<img src="${escapeHtml(optimizedImageUrl(book.coverUrl, 240))}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy" decoding="async" width="160" height="240">` : `<span class="${className}">${escapeHtml(book.title)}</span>`; }
 function openCatalog(target = "recommendation") {
-  if (!isMember()) { prepareSuggestionForm(); showDialog(ui.suggestionDialog, $("suggestName")); return; }
   state.catalogTarget = target; state.catalogResults = []; state.catalogBook = null; state.catalogDuplicateConfirmation = "";
-  ui.catalogResults.innerHTML = ""; ui.catalogPreview.hidden = true; ui.catalogMessage.textContent = ""; ui.catalogSearchForm.reset(); ui.catalogGenre.value = ""; ui.catalogShelfNote.value = ""; ui.catalogReason.value = "";
-  ui.catalogDestination.value = target === "shelf" ? "reading" : "recommendation"; updateCatalogDestination(); showDialog(ui.catalogDialog, ui.catalogQuery);
+  ui.catalogResults.innerHTML = ""; ui.catalogPreview.hidden = true; ui.catalogMessage.textContent = ""; ui.catalogSearchForm.reset(); ui.catalogGuestName.value = ""; ui.catalogGenre.value = ""; ui.catalogShelfNote.value = ""; ui.catalogReason.value = "";
+  ui.catalogDestination.value = isMember() && target === "shelf" ? "reading" : "recommendation"; updateCatalogDestination(); showDialog(ui.catalogDialog, ui.catalogQuery);
 }
 function updateCatalogDestination() {
-  const recommendation = ui.catalogDestination.value === "recommendation";
+  const guest = !isMember(); const recommendation = guest || ui.catalogDestination.value === "recommendation";
+  ui.catalogDestinationGroup.hidden = guest; ui.catalogGuestNameGroup.hidden = !guest;
   ui.catalogReasonGroup.hidden = !recommendation; ui.catalogShelfNoteGroup.hidden = recommendation;
-  ui.catalogSave.textContent = recommendation ? "Add club recommendation" : "Add to my shelf";
+  ui.catalogSave.textContent = guest ? "Send for officer review" : recommendation ? "Add club recommendation" : "Add to my shelf";
   state.catalogDuplicateConfirmation = "";
 }
 function renderCatalogResults() {
@@ -210,7 +210,7 @@ async function selectCatalogBook(index) {
   try {
     const book = await loadCatalogDetails(result); state.catalogBook = book; state.catalogDuplicateConfirmation = ""; ui.catalogGenre.value = String(book.genre || "").slice(0, 80);
     ui.catalogPreviewBook.innerHTML = `<div class="catalog-preview-book">${catalogCover(book, "catalog-preview-cover")}<div><p class="eyebrow">${escapeHtml(book.source || "BOOK CATALOGUE")}</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p><p class="catalog-meta">${book.publicationYear ? `First published ${escapeHtml(book.publicationYear)}` : "Publication date unavailable"}${book.isbn ? ` · ISBN ${escapeHtml(book.isbn)}` : ""}</p>${book.synopsis ? `<p>${escapeHtml(book.synopsis)}</p>` : '<p class="catalog-meta">No synopsis is available for this edition.</p>'}</div></div>`;
-    ui.catalogPreview.hidden = false; ui.catalogMessage.textContent = "Check the details, then choose where to save it.";
+    ui.catalogPreview.hidden = false; ui.catalogMessage.textContent = isMember() ? "Check the details, then choose where to save it." : "Check the details, then send it to the officers for review.";
   } catch (error) {
     console.error(error);
     state.catalogBook = result;
@@ -232,7 +232,7 @@ async function saveCatalogShelfBook(book, status) {
   const existing = await existingShelfEntry(book); const key = `${existing?.id || "new"}:${status}`;
   if (existing && existing.status === status) { ui.catalogMessage.textContent = `This book is already on your ${String(status).replace(/-/g, " ")} shelf.`; return false; }
   if (existing && state.catalogDuplicateConfirmation !== key) { state.catalogDuplicateConfirmation = key; ui.catalogMessage.textContent = `This book is already on your ${String(existing.status || "reading").replace(/-/g, " ")} shelf. Press the button again to move it.`; return false; }
-  const metadata = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey, catalogId: book.catalogId, openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn, publicationYear: book.publicationYear, synopsis: book.synopsis, source: book.source, status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() };
+  const metadata = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() };
   if (existing) { await setDoc(doc(db, "memberShelves", state.user.uid, "entries", existing.id), metadata, { merge: true }); ui.catalogMessage.textContent = "Moved your existing shelf entry."; toast("Your shelf is keeping up with your reading life."); }
   else { await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), metadata); ui.catalogMessage.textContent = "Added to your personal shelf."; toast("Added to your personal shelf — your library is growing."); }
   return true;
@@ -254,20 +254,30 @@ function connectionMessage(names, onOwnShelf) {
 async function saveCatalogRecommendation(book) {
   const { publicMatches, names, onOwnShelf } = await findBookConnections(book);
   if (publicMatches.some((item) => item.memberId === state.user.uid)) { ui.catalogMessage.textContent = "You already recommended this book, so another copy was not added."; toast(ui.catalogMessage.textContent); return false; }
-  await addDoc(collection(db, "books"), { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl, synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey, catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: book.publicationYear || "", source: book.source, date: new Date().toISOString(), comments: [] });
+  await addDoc(collection(db, "books"), { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [] });
   const reaction = connectionMessage(names, onOwnShelf);
   ui.catalogMessage.textContent = reaction; toast(reaction);
   return true;
 }
+async function saveGuestCatalogSuggestion(book) {
+  const name = ui.catalogGuestName.value.trim();
+  if (!name) { ui.catalogMessage.textContent = "Please add your name before sending this suggestion."; ui.catalogGuestName.focus(); return false; }
+  const publicMatch = state.books.find((item) => sameBook(item, book));
+  await addDoc(collection(db, "pendingBooks"), {
+    name, title: book.title || "Untitled book", author: book.author || "Unknown author", genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", why: ui.catalogReason.value.trim(), synopsis: book.synopsis || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [], submittedAt: new Date().toISOString(), status: "pending"
+  });
+  const message = publicMatch ? `This book is already on the club shelf. Your note was sent to the officers for review.` : "Thanks — your suggestion was sent to the officers for review.";
+  ui.catalogMessage.textContent = message; toast(message); return true;
+}
 async function saveCatalogBook() {
-  const book = state.catalogBook; if (!book || !isMember()) return;
+  const book = state.catalogBook; if (!book) return;
   ui.catalogSave.disabled = true;
-  try { const saved = ui.catalogDestination.value === "recommendation" ? await saveCatalogRecommendation(book) : await saveCatalogShelfBook(book, ui.catalogDestination.value); if (saved) setTimeout(() => closeDialog(ui.catalogDialog), 700); }
+  try { const saved = !isMember() ? await saveGuestCatalogSuggestion(book) : ui.catalogDestination.value === "recommendation" ? await saveCatalogRecommendation(book) : await saveCatalogShelfBook(book, ui.catalogDestination.value); if (saved) setTimeout(() => closeDialog(ui.catalogDialog), 900); }
   catch (error) { console.error(error); ui.catalogMessage.textContent = error.message || "Could not save this book."; }
   finally { ui.catalogSave.disabled = false; }
 }
 function openManualCatalogEntry() {
-  const target = ui.catalogDestination.value; closeDialog(ui.catalogDialog);
+  const target = isMember() ? ui.catalogDestination.value : "recommendation"; closeDialog(ui.catalogDialog);
   if (target === "recommendation") { prepareSuggestionForm(); showDialog(ui.suggestionDialog, $("suggestTitle")); return; }
   const shelfForm = $("shelfForm"); if (shelfForm) { shelfForm.hidden = false; $("shelfTitle")?.focus(); } else toast("Open My library, then choose Add a book to enter it manually.");
 }
