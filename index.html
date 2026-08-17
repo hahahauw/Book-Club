@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
   <header class="site-header">
@@ -46,7 +46,7 @@
       <div class="section-label"><span>02</span><h2 id="shelfHeading">The Member Bookshelf</h2></div>
       <div class="section-intro"><div><p>Every cover carries a recommendation from a reader in the club.</p><p id="suggestionHint" class="action-hint">Everyone can search the catalogue. Guest suggestions are sent to officers for review.</p></div><div class="shelf-actions"><button id="openPendingButton" type="button" class="button button-quiet" hidden>Review guest suggestions <span id="pendingCount" class="count-badge">0</span></button><button id="openSuggestionButton" type="button" class="button">Suggest a book</button></div></div>
       <div class="shelf-controls"><label class="visually-hidden" for="bookSearch">Search books</label><input id="bookSearch" type="search" placeholder="Search title, author, or genre"><label class="visually-hidden" for="genreFilter">Filter by genre</label><select id="genreFilter"><option value="">All genres</option></select></div>
-      <p id="shelfResultStatus" class="visually-hidden" role="status" aria-live="polite"></p><div id="booksGrid" class="books-grid"><p class="empty-state loading-state">Loading the shelf…</p></div>
+      <p id="shelfResultStatus" class="visually-hidden" role="status" aria-live="polite"></p><div id="shelfNavigation" class="shelf-navigation" aria-label="Bookshelf navigation"><button id="shelfPreviousButton" class="text-button shelf-step" type="button" aria-label="Show previous books">← Previous</button><button id="shelfExpandButton" class="text-button" type="button" aria-expanded="false" aria-controls="booksGrid">Show all books</button><button id="shelfNextButton" class="text-button shelf-step" type="button" aria-label="Show next books">Next →</button></div><div id="booksGrid" class="books-grid"><p class="empty-state loading-state">Loading the shelf…</p></div>
     </section>
 
     <section id="events" class="shell split-section" aria-labelledby="eventsHeading">
@@ -58,7 +58,7 @@
 
     <section id="members" class="shell members-section" aria-labelledby="membersHeading">
       <div class="section-label"><span>06</span><h2 id="membersHeading">Meet the Club</h2></div>
-      <p class="section-copy">This is our little roll call: tap a name, peek at a shelf, and get to know the readers making this club feel like ours.</p>
+      <p class="section-copy">This is our little roll call: tap a name, peek at a shelf, and get to know the readers who build our club.</p>
       <div id="membersGrid" class="members-grid" aria-live="polite"><p class="empty-state loading-state">Loading member libraries…</p></div>
       <form id="inviteForm" class="officer-panel" hidden><label>Invite an approved member <input id="inviteEmail" type="email" required placeholder="reader@example.com"></label><button class="button" type="submit">Approve email</button></form>
       <form id="uploadSettingsForm" class="officer-panel upload-settings" hidden><div><p class="eyebrow">OFFICER INTEGRATIONS</p><p>Save this club’s unsigned Cloudinary preset so members can upload covers and avatars. A referrer-restricted Google Books key enables the second search catalogue. Never paste a private Cloudinary API secret here.</p></div><label>Cloudinary cloud name <input id="cloudName" maxlength="100" placeholder="e.g., bookclub"></label><label>Unsigned upload preset <input id="uploadPreset" maxlength="100" value="bookclub_unsigned"></label><label>Google Books API key <input id="googleBooksKey" maxlength="200" autocomplete="off" placeholder="Optional, restrict it to this site"></label><button class="button" type="submit">Save integrations</button><span id="uploadSettingsStatus" class="form-message" aria-live="polite"></span></form>
@@ -78,6 +78,6 @@
   <dialog id="pendingDialog" class="dialog" aria-labelledby="pendingDialogTitle"><article class="dialog-card"><button class="close-dialog" type="button" data-close="pendingDialog" aria-label="Close">×</button><p class="eyebrow">OFFICER REVIEW</p><h2 id="pendingDialogTitle">Guest suggestions</h2><p class="catalog-intro">Approve a suggestion to place it on the public shelf, or reject it to remove it from the queue.</p><div id="pendingList" class="pending-list"><p class="empty-state loading-state">Opening the review queue…</p></div></article></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" popover="manual"></div>
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="app.js?v=10"></script>
 </body>
 </html>

@@ -17,7 +17,7 @@ const ui = {
   authStatus: $("authStatus"), signIn: $("signInButton"), signOut: $("signOutButton"), profile: $("profileButton"), theme: $("themeButton"), toast: $("toast"),
   announcementText: $("announcementText"), announcementForm: $("announcementForm"), announcementInput: $("announcementInput"), announcementStatus: $("announcementStatus"),
   month: $("bookOfMonth"), monthCommunity: $("monthCommunity"), monthRating: $("monthRating"), monthProgress: $("monthProgress"), monthForm: $("monthForm"), monthStars: $("monthStars"), monthFinished: $("monthFinished"), monthComment: $("monthComment"), monthMessage: $("monthMessage"), monthNotes: $("monthNotes"), monthOfficer: $("monthOfficer"), monthPicker: $("monthPicker"), saveMonth: $("saveMonthButton"),
-  books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
+  books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), shelfNavigation: $("shelfNavigation"), shelfPrevious: $("shelfPreviousButton"), shelfExpand: $("shelfExpandButton"), shelfNext: $("shelfNextButton"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
   events: $("eventsList"), eventForm: $("eventForm"), eventTitle: $("eventTitle"), eventDate: $("eventDate"), eventDetails: $("eventDetails"),
   boardForm: $("boardForm"), boardText: $("boardText"), boardStatus: $("boardStatus"), boardGuestHint: $("boardGuestHint"), pinBoard: $("pinBoard"),
   memories: $("memoriesGrid"), memoryForm: $("memoryForm"), memoryImage: $("memoryImage"), memoryFile: $("memoryFile"), memoryCaption: $("memoryCaption"), memoryCategory: $("memoryCategory"), inviteForm: $("inviteForm"), inviteEmail: $("inviteEmail"),
@@ -59,16 +59,36 @@ function optimizedImageUrl(url, width = 600) {
   if (width <= 240 && /covers\.openlibrary\.org\/.*-L\.jpg/i.test(value)) return value.replace(/-L\.jpg/i, "-M.jpg");
   return value;
 }
-function coverMarkup(url, title, className = "", loading = "lazy") { return url ? `<img class="${className}" src="${escapeHtml(optimizedImageUrl(url, 600))}" alt="Cover of ${escapeHtml(title)}" loading="${loading}" decoding="async" width="400" height="600">` : `<div class="fallback-cover">${escapeHtml(title)}</div>`; }
+function automaticCoverUrl(book) { const isbn = String(book?.isbn || "").replace(/[^0-9X]/gi, ""); if (book?.coverUrl) return book.coverUrl; if (book?.googleBooksId) return `https://books.google.com/books/content?id=${encodeURIComponent(book.googleBooksId)}&printsec=frontcover&img=1&zoom=2&source=gbs_api`; if (isbn) return `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-L.jpg?default=false`; return ""; }
+function coverRetryAttributes(book) { return `data-cover-title="${escapeHtml(book.title || "")}" data-cover-author="${escapeHtml(book.author || "")}" data-cover-isbn="${escapeHtml(book.isbn || "")}" data-google-books-id="${escapeHtml(book.googleBooksId || "")}"`; }
+function coverImageMarkup(book, width = 600, className = "", loading = "lazy") { return `<img class="${className}" src="${escapeHtml(optimizedImageUrl(automaticCoverUrl(book), width))}" alt="Cover of ${escapeHtml(book.title || "Untitled book")}" ${coverRetryAttributes(book)} loading="${loading}" decoding="async" referrerpolicy="no-referrer" ${loading === "eager" ? 'fetchpriority="high"' : ""} width="400" height="600">`; }
+function coverMarkup(book, className = "", loading = "lazy", width = 600) { return automaticCoverUrl(book) ? coverImageMarkup(book, width, className, loading) : `<div class="fallback-cover">${escapeHtml(book.title || "Untitled book")}</div>`; }
+const shelfAddedMessages = [
+  "Added to your shelf — another story has found a home.",
+  "Shelved! Your little library just gained a new chapter.",
+  "Book added — your reading corner is looking even better.",
+  "Safe on the shelf! Future you has something new to read.",
+  "Another book joins the collection. Excellent choice.",
+  "Added to your personal shelf — happy reading!"
+];
+function shelfAddedMessage() { let index = Math.floor(Math.random() * shelfAddedMessages.length); if (shelfAddedMessage.last === index) index = (index + 1) % shelfAddedMessages.length; shelfAddedMessage.last = index; return shelfAddedMessages[index]; }
+function updateShelfNavigation() {
+  const expanded = ui.books.classList.contains("is-expanded");
+  ui.shelfNavigation.classList.toggle("is-expanded", expanded); ui.shelfExpand.setAttribute("aria-expanded", String(expanded)); ui.shelfExpand.textContent = expanded ? "Show fewer books" : "Show all books";
+  const scrollable = !expanded && ui.books.scrollWidth > ui.books.clientWidth + 2;
+  ui.shelfPrevious.disabled = !scrollable || ui.books.scrollLeft <= 2; ui.shelfNext.disabled = !scrollable || ui.books.scrollLeft + ui.books.clientWidth >= ui.books.scrollWidth - 2;
+}
+function moveShelf(direction) { const card = ui.books.querySelector(".book-card"); const distance = card ? card.getBoundingClientRect().width + 12 : ui.books.clientWidth * .8; ui.books.scrollBy({ left: direction * distance * 2, behavior: "smooth" }); }
+function toggleShelfLayout() { ui.books.classList.toggle("is-expanded"); ui.books.scrollTo({ left: 0, behavior: "smooth" }); updateShelfNavigation(); }
 function renderBooks() {
   const allGenres = [...new Set(state.books.map((book) => String(book.genre || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const selected = state.genre; ui.genre.innerHTML = '<option value="">All genres</option>' + allGenres.map((genre) => `<option value="${escapeHtml(genre)}">${escapeHtml(genre)}</option>`).join(""); ui.genre.value = selected;
   const term = state.search.toLowerCase();
   const books = recentFirst(state.books).filter((book) => (!state.genre || book.genre === state.genre) && (!term || [book.title, book.author, book.genre, book.name, book.memberName].some((value) => String(value || "").toLowerCase().includes(term))));
   ui.shelfResultStatus.textContent = `${books.length} book${books.length === 1 ? "" : "s"} shown.`;
-  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${book.id}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book.coverUrl, book.title)}<span>${escapeHtml(book.title)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
+  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${book.id}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span>${escapeHtml(book.title)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
   ui.monthPicker.innerHTML = '<option value="">Choose a book</option>' + recentFirst(state.books).map((book) => `<option value="${book.id}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
-  renderMonth();
+  renderMonth(); requestAnimationFrame(updateShelfNavigation);
 }
 
 function renderPending() {
@@ -114,10 +134,10 @@ function renderMonth() {
   const recommender = book.memberName || book.name || "a club member";
   const story = [
     reason ? `<div class="month-description"><strong>Why ${escapeHtml(recommender)} recommends it</strong><p>${escapeHtml(reason)}</p></div>` : "",
-    book.synopsis ? `<div class="month-description"><strong>About the book</strong><p>${escapeHtml(book.synopsis)}</p></div>` : "",
+    book.synopsis ? `<div class="month-description"><strong>About the book</strong><p id="monthSynopsis" class="month-synopsis is-collapsed">${escapeHtml(book.synopsis)}</p>${String(book.synopsis).length > 280 ? '<button type="button" class="text-button month-description-toggle" data-toggle-month-description aria-expanded="false" aria-controls="monthSynopsis">Read full description</button>' : ""}</div>` : "",
     !reason && !book.synopsis ? '<p>Read along at your own pace, then leave a rating or discussion note.</p>' : ""
   ].join("");
-  ui.month.innerHTML = `<div class="month-cover">${coverMarkup(book.coverUrl, book.title, "", "eager")}</div><div><p class="eyebrow">BOOK OF THE MONTH</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p>${story}<button type="button" class="text-button month-details" data-book-id="${escapeHtml(book.id)}">Open book details</button></div>`;
+  ui.month.innerHTML = `<div class="month-cover">${coverMarkup(book, "", "eager")}</div><div><p class="eyebrow">BOOK OF THE MONTH</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p>${story}<button type="button" class="text-button month-details" data-book-id="${escapeHtml(book.id)}">Open book details</button></div>`;
   ui.monthCommunity.hidden = false;
   ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember();
   const count = Math.max(state.members.length, 1), finished = state.ratings.filter((item) => item.finished).length;
@@ -181,7 +201,7 @@ async function saveUploadSettings(event) {
 function ensureSuggestionUpload() { if ($("suggestFile")) return; const label = document.createElement("label"); label.textContent = "Upload a cover "; const input = document.createElement("input"); input.id = "suggestFile"; input.type = "file"; input.accept = "image/*"; label.append(input); $("suggestCover").closest("label").after(label); }
 function prepareSuggestionForm() { ensureSuggestionUpload(); const signedMember = isMember(); $("suggestName").readOnly = signedMember; $("suggestName").value = signedMember ? (state.profile.displayName || "Club member") : ""; }
 
-function catalogCover(book, className) { return book.coverUrl ? `<img src="${escapeHtml(optimizedImageUrl(book.coverUrl, 240))}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy" decoding="async" width="160" height="240">` : `<span class="${className}">${escapeHtml(book.title)}</span>`; }
+function catalogCover(book, className) { return automaticCoverUrl(book) ? coverImageMarkup(book, 240) : `<span class="${className}">${escapeHtml(book.title)}</span>`; }
 function openCatalog(target = "recommendation") {
   state.catalogTarget = target; state.catalogResults = []; state.catalogBook = null; state.catalogDuplicateConfirmation = "";
   ui.catalogResults.innerHTML = ""; ui.catalogPreview.hidden = true; ui.catalogMessage.textContent = ""; ui.catalogSearchForm.reset(); ui.catalogGuestName.value = ""; ui.catalogGenre.value = ""; ui.catalogShelfNote.value = ""; ui.catalogReason.value = "";
@@ -234,7 +254,7 @@ async function saveCatalogShelfBook(book, status) {
   if (existing && state.catalogDuplicateConfirmation !== key) { state.catalogDuplicateConfirmation = key; ui.catalogMessage.textContent = `This book is already on your ${String(existing.status || "reading").replace(/-/g, " ")} shelf. Press the button again to move it.`; return false; }
   const metadata = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() };
   if (existing) { await setDoc(doc(db, "memberShelves", state.user.uid, "entries", existing.id), metadata, { merge: true }); ui.catalogMessage.textContent = "Moved your existing shelf entry."; toast("Your shelf is keeping up with your reading life."); }
-  else { await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), metadata); ui.catalogMessage.textContent = "Added to your personal shelf."; toast("Added to your personal shelf — your library is growing."); }
+  else { await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), metadata); const message = shelfAddedMessage(); ui.catalogMessage.textContent = message; toast(message); }
   return true;
 }
 async function findBookConnections(book) {
@@ -443,7 +463,7 @@ function renderShelf(entries) {
   const reading = entries.filter((entry) => entry.status === "reading").length;
   state.shelfEntries = entries;
   stats.innerHTML = `<span>${entries.length} on shelf</span><span>${reading} reading</span>`;
-  shelf.innerHTML = entries.length ? recentFirst(entries).map((entry) => `<article class="personal-book"><button type="button" class="personal-cover-button" data-shelf-book-id="${entry.id}" aria-label="Open ${escapeHtml(entry.title)}">${entry.coverUrl ? `<img src="${escapeHtml(optimizedImageUrl(entry.coverUrl, 480))}" alt="Cover of ${escapeHtml(entry.title)}" loading="lazy" decoding="async" width="240" height="360">` : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</button><div><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.author)}</small><span class="status">${escapeHtml(String(entry.status || "reading").replace(/-/g, " "))}</span></div></article>`).join("") : '<p class="empty-state">This little library is waiting for its first book.</p>';
+  shelf.innerHTML = entries.length ? recentFirst(entries).map((entry) => `<article class="personal-book"><button type="button" class="personal-cover-button" data-shelf-book-id="${entry.id}" aria-label="Open ${escapeHtml(entry.title)}">${automaticCoverUrl(entry) ? coverImageMarkup(entry, 480) : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</button><div><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.author)}</small><span class="status">${escapeHtml(String(entry.status || "reading").replace(/-/g, " "))}</span></div></article>`).join("") : '<p class="empty-state">This little library is waiting for its first book.</p>';
 }
 
 function openBookDetails(book, personal = false) {
@@ -457,7 +477,7 @@ function openBookDetails(book, personal = false) {
   const personalDetails = `<p><strong>${escapeHtml(String(book.status || "reading").replace(/-/g, " "))}</strong></p>${book.note ? `<p><strong>Reader’s note</strong><br>${escapeHtml(book.note)}</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${shelfEditor}`;
   const discussion = `<section class="book-discussion"><h3>Club discussion</h3><div id="bookCommentList" class="book-comment-list">${renderCommentList(book.comments || [])}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><label for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can join the discussion after signing in.</p>'}</section>`;
   const publicDetails = `${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${discussion}${publicEditor}`;
-  ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup(book.coverUrl, title)}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div></div>`;
+  ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup({ ...book, title })}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div></div>`;
   showDialog(ui.bookDialog);
   $("detailShelfStatusForm")?.addEventListener("submit", (event) => updateShelfStatus(event, book.id));
   $("removeShelfBook")?.addEventListener("click", () => removeShelfBook(book.id, title));
@@ -573,7 +593,7 @@ async function addShelfBook(event) {
         date: new Date().toISOString()
       });
       event.currentTarget.reset();
-      toast("Added to your personal shelf — your library is growing.");
+      toast(shelfAddedMessage());
     } catch (error) {
       console.error(error);
       toast(error.message || "Could not add that book.");
@@ -604,6 +624,7 @@ ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click"
 ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.stopShelf = null; });
 $("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(localStorage.getItem("becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 ui.search.addEventListener("input", (event) => { state.search = event.target.value; renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; renderBooks(); });
+ui.shelfPrevious.addEventListener("click", () => moveShelf(-1)); ui.shelfNext.addEventListener("click", () => moveShelf(1)); ui.shelfExpand.addEventListener("click", toggleShelfLayout); ui.books.addEventListener("scroll", updateShelfNavigation, { passive: true }); window.addEventListener("resize", updateShelfNavigation);
 document.addEventListener("click", async (event) => {
   const close = event.target.closest("[data-close]");
   if (close) {
@@ -613,6 +634,8 @@ document.addEventListener("click", async (event) => {
   }
   const catalogResult = event.target.closest("[data-catalog-result]");
   if (catalogResult) await selectCatalogBook(Number(catalogResult.dataset.catalogResult));
+  const monthDescriptionToggle = event.target.closest("[data-toggle-month-description]");
+  if (monthDescriptionToggle) { const synopsis = $(monthDescriptionToggle.getAttribute("aria-controls")); const expanded = monthDescriptionToggle.getAttribute("aria-expanded") === "true"; synopsis?.classList.toggle("is-collapsed", expanded); monthDescriptionToggle.setAttribute("aria-expanded", String(!expanded)); monthDescriptionToggle.textContent = expanded ? "Read full description" : "Show less"; }
   const book = event.target.closest("[data-book-id]");
   if (book) { const item = state.books.find((entry) => entry.id === book.dataset.bookId); if (item) openBookDetails(item); }
   const shelfBook = event.target.closest("[data-shelf-book-id]");
@@ -639,9 +662,26 @@ document.addEventListener("click", async (event) => {
     catch (error) { console.error(error); toast("Could not remove that pin."); }
   }
 });
-document.addEventListener("error", (event) => {
+async function retryCoverImage(image) {
+  const isbn = String(image.dataset.coverIsbn || "").replace(/[^0-9X]/gi, ""); const googleId = image.dataset.googleBooksId || ""; const current = image.currentSrc || image.src;
+  const openLibrary = isbn ? `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-L.jpg?default=false` : "";
+  const googleBooks = googleId ? `https://books.google.com/books/content?id=${encodeURIComponent(googleId)}&printsec=frontcover&img=1&zoom=2&source=gbs_api` : "";
+  const candidates = /openlibrary/i.test(current) ? [["google", googleBooks], ["open", openLibrary]] : [["open", openLibrary], ["google", googleBooks]];
+  for (const [provider, url] of candidates) { const marker = provider === "open" ? "coverTriedOpen" : "coverTriedGoogle"; if (url && url !== current && image.dataset[marker] !== "true") { image.dataset[marker] = "true"; image.src = url; return true; } }
+  if (image.dataset.coverRecoveryTried === "true" || !image.dataset.coverTitle) return false;
+  image.dataset.coverRecoveryTried = "true";
+  try {
+    const probe = { title: image.dataset.coverTitle, author: image.dataset.coverAuthor, isbn, googleBooksId: googleId };
+    const results = await searchCatalog(`${probe.title} ${probe.author}`.trim(), { googleBooksApiKey: state.googleBooksKey });
+    const match = results.find((book) => sameBook(book, probe) && book.coverUrl && optimizedImageUrl(book.coverUrl, 600) !== current);
+    if (match) { image.dataset.coverIsbn = match.isbn || isbn; image.dataset.googleBooksId = match.googleBooksId || googleId; image.src = optimizedImageUrl(match.coverUrl, 600); return true; }
+  } catch (error) { console.warn("Automatic cover recovery skipped:", error); }
+  return false;
+}
+document.addEventListener("error", async (event) => {
   const image = event.target;
   if (!(image instanceof HTMLImageElement)) return;
+  if (image.dataset.coverTitle && await retryCoverImage(image)) return;
   const text = image.alt.replace(/^(Cover of|Portrait of)\s+/i, "") || "Image unavailable";
   const fallback = document.createElement("span");
   if (image.closest(".personal-book")) fallback.className = "personal-fallback";
