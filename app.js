@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, limit } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=2";
 
@@ -17,7 +17,8 @@ const ui = {
   authStatus: $("authStatus"), signIn: $("signInButton"), signOut: $("signOutButton"), profile: $("profileButton"), theme: $("themeButton"), toast: $("toast"),
   announcementText: $("announcementText"), announcementForm: $("announcementForm"), announcementInput: $("announcementInput"), announcementStatus: $("announcementStatus"),
   month: $("bookOfMonth"), monthCommunity: $("monthCommunity"), monthRating: $("monthRating"), monthProgress: $("monthProgress"), monthForm: $("monthForm"), monthStars: $("monthStars"), monthFinished: $("monthFinished"), monthComment: $("monthComment"), monthMessage: $("monthMessage"), monthNotes: $("monthNotes"), monthOfficer: $("monthOfficer"), monthPicker: $("monthPicker"), saveMonth: $("saveMonthButton"),
-  books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), shelfNavigation: $("shelfNavigation"), shelfPrevious: $("shelfPreviousButton"), shelfExpand: $("shelfExpandButton"), shelfNext: $("shelfNextButton"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
+  books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), shelfNavigation: $("shelfNavigation"), shelfPrevious: $("shelfPreviousButton"), shelfExpand: $("shelfExpandButton"), shelfNext: $("shelfNextButton"), surprise: $("surpriseBookButton"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
+  activityFeed: $("activityFeed"), activityStatus: $("activityStatus"),
   events: $("eventsList"), eventForm: $("eventForm"), eventTitle: $("eventTitle"), eventDate: $("eventDate"), eventDetails: $("eventDetails"),
   boardForm: $("boardForm"), boardText: $("boardText"), boardStatus: $("boardStatus"), boardGuestHint: $("boardGuestHint"), pinBoard: $("pinBoard"),
   memories: $("memoriesGrid"), memoryForm: $("memoryForm"), memoryImage: $("memoryImage"), memoryFile: $("memoryFile"), memoryCaption: $("memoryCaption"), memoryCategory: $("memoryCategory"), inviteForm: $("inviteForm"), inviteEmail: $("inviteEmail"),
@@ -25,7 +26,7 @@ const ui = {
   members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
 };
 
-const state = { user: null, profile: null, books: [], members: [], pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", events: [], memories: [], boardPosts: [], shelfEntries: [], search: "", genre: "", openProfileId: null, stopRatings: null, stopMonthReasons: null, stopShelf: null, stopPending: null, lastDialogTrigger: null, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "" };
+const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", events: [], memories: [], boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "" };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -36,6 +37,15 @@ function color(value) { return /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#e
 function dateLabel(value) { const date = new Date(`${value || ""}T12:00:00`); return Number.isNaN(date.valueOf()) ? "Date to be announced" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
 function dateTimeLabel(value) { const date = new Date(value || ""); return Number.isNaN(date.valueOf()) ? "Recently" : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" }); }
 function recentFirst(items) { return [...items].sort((a, b) => String(b.date || b.updatedAt || "").localeCompare(String(a.date || a.updatedAt || ""))); }
+function newestActivities(items) { return [...items].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))); }
+function relativeTime(value) {
+  const date = new Date(value || ""), elapsed = date.valueOf() - Date.now();
+  if (Number.isNaN(date.valueOf())) return "Recently";
+  const units = [["year", 31536000000], ["month", 2592000000], ["week", 604800000], ["day", 86400000], ["hour", 3600000], ["minute", 60000]];
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  for (const [unit, milliseconds] of units) if (Math.abs(elapsed) >= milliseconds || unit === "minute") return formatter.format(Math.round(elapsed / milliseconds), unit);
+  return "Recently";
+}
 function isMember() { return Boolean(state.user && ["member", "officer"].includes(state.profile?.role)); }
 function isOfficer() { return state.profile?.role === "officer"; }
 function toast(message) {
@@ -51,6 +61,73 @@ function toast(message) {
 function showDialog(dialog, focusTarget) { state.lastDialogTrigger = document.activeElement; dialog.showModal(); requestAnimationFrame(() => (focusTarget || dialog.querySelector("input,select,textarea,button"))?.focus()); }
 function closeDialog(dialog) { if (!dialog?.open) return; dialog.close(); const trigger = state.lastDialogTrigger; state.lastDialogTrigger = null; if (trigger?.isConnected) requestAnimationFrame(() => trigger.focus()); }
 async function runBusy(button, busyText, action) { if (!button || button.disabled) return; const label = button.textContent; button.disabled = true; if (busyText) button.textContent = busyText; try { return await action(); } finally { button.disabled = false; button.textContent = label; } }
+function activityMember(actorId) { return state.members.find((member) => member.id === actorId) || (actorId === state.user?.uid ? { id: actorId, ...state.profile } : { id: actorId, displayName: "A club member", photoURL: "" }); }
+function activityAction(activity) {
+  const actions = {
+    started_reading: "started reading",
+    finished_book: "finished",
+    want_to_read: "saved for later",
+    rated_book: "rated",
+    discussed_book: "joined the discussion about",
+    recommended_book: "recommended"
+  };
+  return actions[activity.type] || "shared an update about";
+}
+function activityRows(items, compact = false) {
+  return newestActivities(items).map((activity) => {
+    const member = activityMember(activity.actorId), name = member.displayName || "A club member";
+    const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 96))}" alt="" loading="lazy" decoding="async" width="44" height="44">` : escapeHtml(initials(name));
+    const publicBook = activity.publicBookId && state.books.some((book) => book.id === activity.publicBookId);
+    const target = publicBook ? `data-book-id="${escapeHtml(activity.publicBookId)}"` : `data-member-id="${escapeHtml(activity.actorId)}"`;
+    const rating = activity.type === "rated_book" ? ` <span class="activity-rating" aria-label="${Number(activity.stars || 0)} out of 5 stars">${"★".repeat(Number(activity.stars || 0))}</span>` : "";
+    return `<li><button type="button" class="activity-item${compact ? " is-compact" : ""}" ${target}><span class="activity-avatar">${avatar}</span><span class="activity-copy"><span><strong>${escapeHtml(name)}</strong> ${escapeHtml(activityAction(activity))} <cite>${escapeHtml(activity.bookTitle || "a book")}</cite>${rating}</span><small>${escapeHtml(activity.bookAuthor || "Unknown author")}</small></span><time class="activity-time" datetime="${escapeHtml(activity.createdAt || "")}" title="${escapeHtml(dateTimeLabel(activity.createdAt))}">${escapeHtml(relativeTime(activity.createdAt))}</time></button></li>`;
+  }).join("");
+}
+function renderActivityFeed() {
+  ui.activityFeed.removeAttribute("aria-busy");
+  ui.activityFeed.innerHTML = state.activities.length ? `<ol class="activity-list">${activityRows(state.activities)}</ol>` : '<p class="empty-state">No public reading activity yet. Members can choose to share updates from their library cards.</p>';
+  ui.activityStatus.textContent = state.activities.length ? `${state.activities.length} recent club ${state.activities.length === 1 ? "activity" : "activities"} loaded.` : "No public club activity yet.";
+}
+function renderMemberActivity() {
+  const target = $("memberActivityList"); if (!target) return;
+  target.removeAttribute("aria-busy");
+  target.innerHTML = state.profileActivities.length ? `<ol class="activity-list profile-activity-list">${activityRows(state.profileActivities, true)}</ol>` : '<p class="empty-state">No public reading activity yet.</p>';
+}
+function activityTypeForStatus(status) { return status === "read" ? "finished_book" : status === "want-to-read" ? "want_to_read" : "started_reading"; }
+function activityDocumentId(type, key) { return `${state.user?.uid || "member"}_${type}_${key}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 220); }
+async function recordActivity(type, book, options = {}) {
+  if (!isMember() || state.profile?.shareActivity !== true || !book?.title) return false;
+  const payload = {
+    actorId: state.user.uid,
+    type,
+    bookTitle: String(book.title || "Untitled book").slice(0, 160),
+    bookAuthor: String(book.author || "Unknown author").slice(0, 100),
+    coverUrl: String(book.coverUrl || "").slice(0, 500),
+    catalogKey: String(book.catalogKey || "").slice(0, 200),
+    publicBookId: String(options.publicBookId || "").slice(0, 128),
+    shelfEntryId: String(options.shelfEntryId || "").slice(0, 128),
+    createdAt: new Date().toISOString()
+  };
+  if (type === "rated_book") payload.stars = Math.min(5, Math.max(1, Math.round(Number(options.stars || 1))));
+  try {
+    if (options.key) await setDoc(doc(db, "activities", activityDocumentId(type, options.key)), payload);
+    else await addDoc(collection(db, "activities"), payload);
+    return true;
+  } catch (error) {
+    console.warn("Activity was not published; the main update was still saved:", error);
+    return false;
+  }
+}
+async function clearOwnActivityHistory() {
+  let removed = 0;
+  for (let pass = 0; pass < 5; pass += 1) {
+    const snapshot = await getDocs(query(collection(db, "activities"), where("actorId", "==", state.user.uid), limit(200)));
+    if (snapshot.empty) break;
+    const batch = writeBatch(db); snapshot.docs.forEach((entry) => batch.delete(entry.ref)); await batch.commit(); removed += snapshot.size;
+    if (snapshot.size < 200) break;
+  }
+  return removed;
+}
 function setAuthUi() { const name = state.profile?.displayName || state.user?.displayName || "reader"; ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest"; ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember(); ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review."; if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; } syncPendingSubscription(); renderMonth(); renderEvents(); renderMemories(); renderBoard(); renderPending(); }
 
 function optimizedImageUrl(url, width = 600) {
@@ -79,16 +156,31 @@ function updateShelfNavigation() {
   ui.shelfPrevious.disabled = !scrollable || ui.books.scrollLeft <= 2; ui.shelfNext.disabled = !scrollable || ui.books.scrollLeft + ui.books.clientWidth >= ui.books.scrollWidth - 2;
 }
 function moveShelf(direction) { const card = ui.books.querySelector(".book-card"); const distance = card ? card.getBoundingClientRect().width + 12 : ui.books.clientWidth * .8; ui.books.scrollBy({ left: direction * distance * 2, behavior: "smooth" }); }
-function toggleShelfLayout() { ui.books.classList.toggle("is-expanded"); ui.books.scrollTo({ left: 0, behavior: "smooth" }); updateShelfNavigation(); }
+function toggleShelfLayout() { ui.books.classList.toggle("is-expanded"); sessionStorage.setItem("becShelfExpanded", String(ui.books.classList.contains("is-expanded"))); ui.books.scrollTo({ left: 0, behavior: "smooth" }); updateShelfNavigation(); }
+function visibleBooks() {
+  const term = state.search.toLowerCase();
+  return recentFirst(state.books).filter((book) => (!state.genre || book.genre === state.genre) && (!term || [book.title, book.author, book.genre, book.name, book.memberName].some((value) => String(value || "").toLowerCase().includes(term))));
+}
+function pickRandomBook() {
+  const unique = visibleBooks().filter((book, index, books) => books.findIndex((candidate) => sameBook(candidate, book)) === index);
+  if (!unique.length) { toast("No books match the current shelf filters yet."); return; }
+  const choices = unique.length > 1 ? unique.filter((book) => book.id !== state.lastRandomBookId) : unique;
+  const book = choices[Math.floor(Math.random() * choices.length)];
+  state.lastRandomBookId = book.id; state.randomPickerActive = true;
+  openBookDetails(book);
+}
 function renderBooks() {
+  const scrollLeft = ui.books.scrollLeft;
+  ui.books.removeAttribute("aria-busy");
+  ui.books.classList.toggle("is-expanded", sessionStorage.getItem("becShelfExpanded") === "true");
+  ui.search.value = state.search;
   const allGenres = [...new Set(state.books.map((book) => String(book.genre || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const selected = state.genre; ui.genre.innerHTML = '<option value="">All genres</option>' + allGenres.map((genre) => `<option value="${escapeHtml(genre)}">${escapeHtml(genre)}</option>`).join(""); ui.genre.value = selected;
-  const term = state.search.toLowerCase();
-  const books = recentFirst(state.books).filter((book) => (!state.genre || book.genre === state.genre) && (!term || [book.title, book.author, book.genre, book.name, book.memberName].some((value) => String(value || "").toLowerCase().includes(term))));
+  const books = visibleBooks();
   ui.shelfResultStatus.textContent = `${books.length} book${books.length === 1 ? "" : "s"} shown.`;
   ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${book.id}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span>${escapeHtml(book.title)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
   ui.monthPicker.innerHTML = '<option value="">Choose a book</option>' + recentFirst(state.books).map((book) => `<option value="${book.id}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
-  renderMonth(); requestAnimationFrame(updateShelfNavigation);
+  renderMonth(); requestAnimationFrame(() => { if (!ui.books.classList.contains("is-expanded")) ui.books.scrollLeft = Math.min(scrollLeft, Math.max(0, ui.books.scrollWidth - ui.books.clientWidth)); updateShelfNavigation(); });
 }
 
 function renderPending() {
@@ -253,8 +345,15 @@ async function saveCatalogShelfBook(book, status) {
   if (existing && existing.status === status) { ui.catalogMessage.textContent = `This book is already on your ${String(status).replace(/-/g, " ")} shelf.`; return false; }
   if (existing && state.catalogDuplicateConfirmation !== key) { state.catalogDuplicateConfirmation = key; ui.catalogMessage.textContent = `This book is already on your ${String(existing.status || "reading").replace(/-/g, " ")} shelf. Press the button again to move it.`; return false; }
   const metadata = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() };
-  if (existing) { await setDoc(doc(db, "memberShelves", state.user.uid, "entries", existing.id), metadata, { merge: true }); ui.catalogMessage.textContent = "Moved your existing shelf entry."; toast("Your shelf is keeping up with your reading life."); }
-  else { await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), metadata); const message = shelfAddedMessage(); ui.catalogMessage.textContent = message; toast(message); }
+  if (existing) {
+    await setDoc(doc(db, "memberShelves", state.user.uid, "entries", existing.id), metadata, { merge: true });
+    await recordActivity(activityTypeForStatus(status), metadata, { shelfEntryId: existing.id, key: `${existing.id}_${status}` });
+    ui.catalogMessage.textContent = "Moved your existing shelf entry."; toast("Your shelf is keeping up with your reading life.");
+  } else {
+    const added = await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), metadata);
+    await recordActivity(activityTypeForStatus(status), metadata, { shelfEntryId: added.id, key: `${added.id}_${status}` });
+    const message = shelfAddedMessage(); ui.catalogMessage.textContent = message; toast(message);
+  }
   return true;
 }
 async function findBookConnections(book) {
@@ -262,7 +361,7 @@ async function findBookConnections(book) {
   const names = new Map(); let onOwnShelf = false;
   publicMatches.forEach((item) => { const name = item.memberName || item.name; if (name) names.set(item.memberId || `name:${name}`, name); });
   try {
-    const personalShelves = await getDocs(collectionGroup(db, "entries"));
+    const personalShelves = book.catalogKey ? await getDocs(query(collectionGroup(db, "entries"), where("catalogKey", "==", book.catalogKey), limit(30))) : await getDocs(query(collection(db, "memberShelves", state.user.uid, "entries"), limit(100)));
     personalShelves.docs.forEach((entry) => { const item = entry.data(); if (!sameBook(item, book)) return; const ownerId = entry.ref.parent.parent?.id; if (ownerId === state.user.uid) onOwnShelf = true; else { const member = state.members.find((profile) => profile.id === ownerId); names.set(ownerId || `shelf:${entry.id}`, member?.displayName || "another member"); } });
   } catch (error) { console.warn("Personal-shelf match skipped:", error); }
   return { publicMatches, names, onOwnShelf };
@@ -274,7 +373,9 @@ function connectionMessage(names, onOwnShelf) {
 async function saveCatalogRecommendation(book) {
   const { publicMatches, names, onOwnShelf } = await findBookConnections(book);
   if (publicMatches.some((item) => item.memberId === state.user.uid)) { ui.catalogMessage.textContent = "You already recommended this book, so another copy was not added."; toast(ui.catalogMessage.textContent); return false; }
-  await addDoc(collection(db, "books"), { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [] });
+  const recommendation = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [] };
+  const added = await addDoc(collection(db, "books"), recommendation);
+  await recordActivity("recommended_book", recommendation, { publicBookId: added.id, key: added.id });
   const reaction = connectionMessage(names, onOwnShelf);
   ui.catalogMessage.textContent = reaction; toast(reaction);
   return true;
@@ -307,14 +408,22 @@ async function ensureProfile(user) {
   const ref = doc(db, "members", user.uid); const existing = await getDoc(ref);
   if (existing.exists()) {
     const profile = existing.data();
-    if (["member", "officer"].includes(profile.role)) return profile;
+    const phaseOneDefaults = {
+      favoriteBookIds: Array.isArray(profile.favoriteBookIds) ? profile.favoriteBookIds.slice(0, 3) : [],
+      shareActivity: typeof profile.shareActivity === "boolean" ? profile.shareActivity : false,
+      showReadingStats: typeof profile.showReadingStats === "boolean" ? profile.showReadingStats : true
+    };
+    if (["member", "officer"].includes(profile.role)) {
+      if (!Array.isArray(profile.favoriteBookIds) || typeof profile.shareActivity !== "boolean" || typeof profile.showReadingStats !== "boolean") await setDoc(ref, phaseOneDefaults, { merge: true });
+      return { ...profile, ...phaseOneDefaults };
+    }
     // Older library cards did not have a role. Complete that one-time migration
     // using the signed-in owner's existing public-card values, never Google data.
-    const migrated = { displayName: profile.displayName || "Club member", photoURL: profile.photoURL || "", joinedAt: profile.joinedAt || new Date().toISOString(), role: "member", bio: profile.bio || "", themeColor: profile.themeColor || "", clubTitle: "", favoriteGenre: profile.favoriteGenre || "", currentlyReading: profile.currentlyReading || "" };
+    const migrated = { displayName: profile.displayName || "Club member", photoURL: profile.photoURL || "", joinedAt: profile.joinedAt || new Date().toISOString(), role: "member", bio: profile.bio || "", themeColor: profile.themeColor || "", clubTitle: "", favoriteGenre: profile.favoriteGenre || "", currentlyReading: profile.currentlyReading || "", ...phaseOneDefaults };
     await setDoc(ref, migrated, { merge: true });
     return { ...profile, ...migrated };
   }
-  const profile = { displayName: "Club member", photoURL: "", joinedAt: new Date().toISOString(), role: "member", bio: "", themeColor: "", clubTitle: "", favoriteGenre: "", currentlyReading: "" };
+  const profile = { displayName: "Club member", photoURL: "", joinedAt: new Date().toISOString(), role: "member", bio: "", themeColor: "", clubTitle: "", favoriteGenre: "", currentlyReading: "", favoriteBookIds: [], shareActivity: false, showReadingStats: true };
   await setDoc(ref, profile);
   try { await setDoc(doc(db, "memberPrivate", user.uid), { email: String(user.email || "") }); }
   catch (error) { console.warn("Private member mapping could not be saved:", error); }
@@ -337,7 +446,9 @@ async function submitSuggestion(event) {
     if (isMember()) {
       const { publicMatches, names, onOwnShelf } = await findBookConnections(book);
       if (publicMatches.some((item) => item.memberId === state.user.uid)) { ui.suggestionMessage.textContent = "You already recommended this book, so another copy was not added."; return; }
-      await addDoc(collection(db, "books"), { ...book, memberId: state.user.uid, memberName: state.profile.displayName });
+      const recommendation = { ...book, memberId: state.user.uid, memberName: state.profile.displayName };
+      const added = await addDoc(collection(db, "books"), recommendation);
+      await recordActivity("recommended_book", recommendation, { publicBookId: added.id, key: added.id });
       const reaction = connectionMessage(names, onOwnShelf); ui.suggestionMessage.textContent = reaction; toast(reaction);
     } else {
       await addDoc(collection(db, "pendingBooks"), { ...book, submittedAt: new Date().toISOString(), status: "pending" });
@@ -353,7 +464,15 @@ async function saveRating(event) {
   if (!isMember()) { ui.monthMessage.textContent = "Sign in with an invited member account to save an update."; return; }
   const button = event.currentTarget.querySelector("button[type=submit]");
   await runBusy(button, "Saving…", async () => {
-    try { await setDoc(doc(db, "bookOfMonthRatings", book.id, "members", state.user.uid), { memberId: state.user.uid, displayName: state.profile.displayName, stars: Number(ui.monthStars.value), finished: ui.monthFinished.checked, comment: ui.monthComment.value.trim(), updatedAt: new Date().toISOString() }); ui.monthMessage.textContent = "Your update is saved."; }
+    try {
+      const previous = state.ratings.find((item) => item.memberId === state.user.uid);
+      const update = { memberId: state.user.uid, displayName: state.profile.displayName, stars: Number(ui.monthStars.value), finished: ui.monthFinished.checked, comment: ui.monthComment.value.trim(), updatedAt: new Date().toISOString() };
+      if (previous && Number(previous.stars) === update.stars && Boolean(previous.finished) === update.finished && String(previous.comment || "") === update.comment) { ui.monthMessage.textContent = "Nothing changed — your last update is already saved."; return; }
+      await setDoc(doc(db, "bookOfMonthRatings", book.id, "members", state.user.uid), update);
+      const type = update.finished && !previous?.finished ? "finished_book" : update.comment && update.comment !== String(previous?.comment || "") ? "discussed_book" : "rated_book";
+      await recordActivity(type, book, { publicBookId: book.id, stars: update.stars, key: `month_${book.id}_${type}` });
+      ui.monthMessage.textContent = "Your update is saved.";
+    }
     catch (error) { console.error(error); ui.monthMessage.textContent = "Could not save your update."; }
   });
 }
@@ -394,6 +513,7 @@ async function postBoard(event) {
 }
 
 function renderMembers() {
+  ui.members.removeAttribute("aria-busy");
   ui.members.innerHTML = state.members.length ? state.members.map((member) => {
     const label = member.clubTitle || (member.role === "officer" ? "Officer" : "Member");
     const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 192))}" alt="Portrait of ${escapeHtml(member.displayName || "club member")}" loading="lazy" decoding="async" width="96" height="96">` : escapeHtml(initials(member.displayName));
@@ -403,24 +523,30 @@ function renderMembers() {
 async function openProfile(uid) {
   state.stopShelf?.();
   state.stopShelf = null;
+  state.stopProfileActivity?.();
+  state.stopProfileActivity = null; state.profileActivities = [];
   state.openProfileId = uid;
-  ui.profileContent.innerHTML = '<p class="empty-state loading-state">Opening this member library…</p>';
+  state.openProfileMember = null;
+  ui.profileContent.innerHTML = '<div class="skeleton skeleton-profile" aria-hidden="true"></div><p class="visually-hidden" role="status">Opening this member library…</p>';
   if (!ui.profileDialog.open) showDialog(ui.profileDialog);
   try {
     const snapshot = await getDoc(doc(db, "members", uid));
     if (!snapshot.exists()) throw new Error("That member library is unavailable.");
     const member = snapshot.data(), own = state.user?.uid === uid, accent = color(member.themeColor);
+    state.openProfileMember = { id: uid, ...member };
     ui.profileDialog.setAttribute("aria-label", `${member.displayName || "Club member"}’s member library`);
     const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 360))}" alt="Portrait of ${escapeHtml(member.displayName || "club member")}" decoding="async" width="180" height="180">` : escapeHtml(initials(member.displayName));
     const shelfForm = own && isMember() ? `<button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Add a book</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><button id="openCatalogFromShelf" type="button" class="text-button">Find a book automatically</button><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>A small note <textarea id="shelfNote" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
-    const customize = own && isMember() ? `<details class="profile-customize"><summary>Customize my library card</summary><form id="profileForm"><label>Display name <input id="profileNameInput" maxlength="60" value="${escapeHtml(member.displayName || "")}"></label><label>Short bio <textarea id="profileBioInput" maxlength="80">${escapeHtml(member.bio || "")}</textarea></label><label>Library colour <input id="profileColorInput" type="color" value="${accent}"></label><label>Public avatar URL <input id="profilePhotoInput" type="url" maxlength="500" value="${escapeHtml(member.photoURL || "")}" placeholder="Optional image link"></label><label>Or upload an avatar <input id="profilePhotoFile" type="file" accept="image/*"></label><label>Favourite genre <input id="profileGenreInput" maxlength="40" value="${escapeHtml(member.favoriteGenre || "")}" placeholder="e.g. Fantasy"></label><label>Currently reading <input id="profileCurrentInput" maxlength="100" value="${escapeHtml(member.currentlyReading || "")}" placeholder="A book you are into right now"></label>${isOfficer() ? `<label>Club role label <select id="profileTitleInput"><option value="Officer" ${member.clubTitle !== "President" ? "selected" : ""}>Officer</option><option value="President" ${member.clubTitle === "President" ? "selected" : ""}>President</option></select></label>` : ""}<button type="submit" class="text-button">Save library card</button></form></details>` : "";
-    ui.profileContent.innerHTML = `<div class="profile-layout" style="--accent:${accent}"><aside class="profile-side"><div class="profile-avatar">${avatar}</div><h2>${escapeHtml(member.displayName || "Club member")}</h2><p>${escapeHtml(member.bio || "A reader in the Book Enthusiasts Club.")}</p><p>Member since ${escapeHtml(dateLabel(String(member.joinedAt || "").slice(0, 10)))}</p><div class="profile-meta">${member.clubTitle ? `<span>${escapeHtml(member.clubTitle)}</span>` : ""}${member.favoriteGenre ? `<span>Usually reading ${escapeHtml(member.favoriteGenre)}</span>` : ""}${member.currentlyReading ? `<span>Currently: ${escapeHtml(member.currentlyReading)}</span>` : ""}</div>${customize}</aside><section class="profile-library"><p class="eyebrow">PERSONAL LIBRARY</p><h3>${own ? "My shelf" : `${escapeHtml(member.displayName || "Their")}’s shelf`}</h3><div id="libraryStats" class="library-stats"></div><div id="personalBooks" class="personal-books"><p class="empty-state loading-state">Loading this library…</p></div>${shelfForm}</section></div>`;
+    const customize = own && isMember() ? `<details class="profile-customize"><summary>Customize my library card</summary><form id="profileForm"><label>Display name <input id="profileNameInput" maxlength="60" value="${escapeHtml(member.displayName || "")}"></label><label>Short bio <textarea id="profileBioInput" maxlength="80">${escapeHtml(member.bio || "")}</textarea></label><label>Library colour <input id="profileColorInput" type="color" value="${accent}"></label><label>Public avatar URL <input id="profilePhotoInput" type="url" maxlength="500" value="${escapeHtml(member.photoURL || "")}" placeholder="Optional image link"></label><label>Or upload an avatar <input id="profilePhotoFile" type="file" accept="image/*"></label><label>Favourite genre <input id="profileGenreInput" maxlength="40" value="${escapeHtml(member.favoriteGenre || "")}" placeholder="e.g. Fantasy"></label><label>Currently reading <input id="profileCurrentInput" maxlength="100" value="${escapeHtml(member.currentlyReading || "")}" placeholder="A book you are into right now"></label><label class="checkbox-line"><input id="profileShowStats" type="checkbox" ${member.showReadingStats !== false ? "checked" : ""}> Show my reading summary to visitors</label><label class="checkbox-line"><input id="profileShareActivity" type="checkbox" ${member.shareActivity === true ? "checked" : ""}> Share meaningful reading activity</label><p class="activity-privacy-note">This shares book titles and actions such as started, finished, rated, or discussed. It never shares your email, notes, or comment text.</p>${isOfficer() ? `<label>Club role label <select id="profileTitleInput"><option value="Officer" ${member.clubTitle !== "President" ? "selected" : ""}>Officer</option><option value="President" ${member.clubTitle === "President" ? "selected" : ""}>President</option></select></label>` : ""}<button type="submit" class="text-button">Save library card</button></form></details>` : "";
+    ui.profileContent.innerHTML = `<div class="profile-layout" style="--accent:${accent}"><aside class="profile-side"><div class="profile-avatar">${avatar}</div><h2>${escapeHtml(member.displayName || "Club member")}</h2><p>${escapeHtml(member.bio || "A reader in the Book Enthusiasts Club.")}</p><p>Member since ${escapeHtml(dateLabel(String(member.joinedAt || "").slice(0, 10)))}</p><div class="profile-meta">${member.clubTitle ? `<span>${escapeHtml(member.clubTitle)}</span>` : ""}${member.favoriteGenre ? `<span>Usually reading ${escapeHtml(member.favoriteGenre)}</span>` : ""}${member.currentlyReading ? `<span>Currently: ${escapeHtml(member.currentlyReading)}</span>` : ""}</div>${customize}</aside><section class="profile-library"><p class="eyebrow">PERSONAL LIBRARY</p><h3>${own ? "My shelf" : `${escapeHtml(member.displayName || "Their")}’s shelf`}</h3><div id="libraryStats" class="library-stats"><span class="skeleton skeleton-pill" aria-hidden="true"></span><span class="skeleton skeleton-pill" aria-hidden="true"></span></div><div id="readingSnapshot" class="profile-reading-summary" aria-live="polite"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div><section class="profile-favorites"><div class="profile-section-heading"><h4>Top 3 favorites</h4><p>${own ? "Open a shelf book to pin or unpin it." : "A small peek at their all-time picks."}</p></div><div id="favoriteBooks" class="favorite-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><div id="personalBooks" class="personal-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div>${shelfForm}<section class="profile-activity"><h4>Recent reading activity</h4><div id="memberActivityList" aria-busy="true"><div class="skeleton skeleton-activity" aria-hidden="true"></div></div></section></section></div>`;
     $("profileForm")?.addEventListener("submit", saveProfileCard);
     $("shelfForm")?.addEventListener("submit", addShelfBook);
     $("openCatalogFromShelf")?.addEventListener("click", () => openCatalog("shelf"));
     $("shelfFormToggle")?.addEventListener("click", (event) => { const form = $("shelfForm"), open = form.hidden; form.hidden = !open; event.currentTarget.setAttribute("aria-expanded", String(open)); event.currentTarget.textContent = open ? "Hide add-book form" : "Add a book"; });
     state.stopShelf?.();
     state.stopShelf = onSnapshot(collection(db, "memberShelves", uid, "entries"), (shelf) => renderShelf(shelf.docs.map((entry) => ({ id: entry.id, ...entry.data() }))), () => { $("personalBooks").innerHTML = '<p class="empty-state">This library is unavailable right now. Check your connection and try reopening it.</p>'; });
+    if (member.shareActivity === true) state.stopProfileActivity = onSnapshot(query(collection(db, "activities"), where("actorId", "==", uid), limit(30)), (activity) => { state.profileActivities = newestActivities(activity.docs.map((entry) => ({ id: entry.id, ...entry.data() }))).slice(0, 10); renderMemberActivity(); }, () => { const target = $("memberActivityList"); if (target) { target.removeAttribute("aria-busy"); target.innerHTML = '<p class="empty-state">Public activity is unavailable right now.</p>'; } });
+    else renderMemberActivity();
   } catch (error) {
     console.error(error);
     ui.profileContent.innerHTML = `<p class="empty-state profile-error">${escapeHtml(error.message || "That member library could not open.")}</p>`;
@@ -429,6 +555,9 @@ async function openProfile(uid) {
 async function saveProfileCard(event) {
   event.preventDefault();
   if (!isMember() || state.openProfileId !== state.user?.uid) return;
+  const nextShareActivity = Boolean($("profileShareActivity")?.checked);
+  const disablingActivity = state.profile?.shareActivity === true && !nextShareActivity;
+  if (disablingActivity && !window.confirm("Turn off activity sharing and remove your existing public activity history? Your shelf, ratings, and comments will stay intact.")) return;
   const button = event.currentTarget.querySelector("button[type=submit]");
   await runBusy(button, "Saving…", async () => {
     try {
@@ -439,9 +568,12 @@ async function saveProfileCard(event) {
         bio: $("profileBioInput").value.trim(),
         themeColor: $("profileColorInput").value,
         favoriteGenre: $("profileGenreInput")?.value.trim() || "",
-        currentlyReading: $("profileCurrentInput")?.value.trim() || ""
+        currentlyReading: $("profileCurrentInput")?.value.trim() || "",
+        shareActivity: nextShareActivity,
+        showReadingStats: Boolean($("profileShowStats")?.checked)
       };
       if (isOfficer()) updates.clubTitle = $("profileTitleInput")?.value || "Officer";
+      if (disablingActivity) await clearOwnActivityHistory();
       await setDoc(doc(db, "members", state.openProfileId), updates, { merge: true });
       state.profile = { ...state.profile, ...updates };
       setAuthUi();
@@ -458,12 +590,38 @@ function renderCommentList(comments = []) {
   return comments.length ? comments.map((comment) => `<article class="book-comment"><span class="comment-avatar">${escapeHtml(initials(comment.name))}</span><div><p><strong>${escapeHtml(comment.name || "Club member")}</strong><time>${escapeHtml(dateTimeLabel(comment.date))}</time></p><div>${escapeHtml(comment.text)}</div></div></article>`).join("") : '<p class="empty-state">No discussion notes yet. A member can start the conversation.</p>';
 }
 function renderShelf(entries) {
-  const stats = $("libraryStats"), shelf = $("personalBooks");
+  const stats = $("libraryStats"), shelf = $("personalBooks"), snapshot = $("readingSnapshot"), favorites = $("favoriteBooks");
   if (!stats || !shelf) return;
-  const reading = entries.filter((entry) => entry.status === "reading").length;
+  const reading = entries.filter((entry) => entry.status === "reading").length, read = entries.filter((entry) => entry.status === "read").length, wanted = entries.filter((entry) => entry.status === "want-to-read").length;
+  const own = state.openProfileId === state.user?.uid, member = state.openProfileMember || {}, preferredIds = (own ? state.profile?.favoriteBookIds : member.favoriteBookIds) || [];
+  const genreCounts = entries.reduce((counts, entry) => { const genre = String(entry.genre || "").trim(); if (genre) counts.set(genre, (counts.get(genre) || 0) + 1); return counts; }, new Map());
+  const topGenre = [...genreCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || "Still exploring";
   state.shelfEntries = entries;
   stats.innerHTML = `<span>${entries.length} on shelf</span><span>${reading} reading</span>`;
+  if (snapshot) snapshot.innerHTML = own || member.showReadingStats !== false ? `<article class="reading-summary-card"><strong>${entries.length}</strong><span>books collected</span></article><article class="reading-summary-card"><strong>${read}</strong><span>finished</span></article><article class="reading-summary-card"><strong>${reading}</strong><span>currently reading</span></article><article class="reading-summary-card"><strong>${wanted}</strong><span>want to read</span></article><article class="reading-summary-card"><strong>${escapeHtml(topGenre)}</strong><span>most-shelved genre</span></article>` : '<p class="empty-state">This member keeps their reading summary private.</p>';
+  if (favorites) {
+    const favoriteEntries = preferredIds.map((id) => entries.find((entry) => entry.id === id)).filter(Boolean).slice(0, 3);
+    favorites.removeAttribute("aria-busy");
+    favorites.innerHTML = favoriteEntries.length ? favoriteEntries.map((entry, index) => `<article class="favorite-book"><button type="button" class="favorite-book-open" data-shelf-book-id="${escapeHtml(entry.id)}"><span class="favorite-cover">${automaticCoverUrl(entry) ? coverImageMarkup(entry, 320) : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</span><span class="favorite-title">${escapeHtml(entry.title)}</span><span class="favorite-position">Favorite ${index + 1}</span></button></article>`).join("") : `<p class="empty-state">${own ? "No favorites pinned yet. Open one of your shelf books to add it to your Top 3." : "No favorite books shared yet."}</p>`;
+  }
+  shelf.removeAttribute("aria-busy");
   shelf.innerHTML = entries.length ? recentFirst(entries).map((entry) => `<article class="personal-book"><button type="button" class="personal-cover-button" data-shelf-book-id="${entry.id}" aria-label="Open ${escapeHtml(entry.title)}">${automaticCoverUrl(entry) ? coverImageMarkup(entry, 480) : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</button><div><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.author)}</small><span class="status">${escapeHtml(String(entry.status || "reading").replace(/-/g, " "))}</span></div></article>`).join("") : '<p class="empty-state">This little library is waiting for its first book.</p>';
+}
+
+async function toggleFavorite(entryId) {
+  if (!isMember() || state.openProfileId !== state.user?.uid) return;
+  const current = Array.isArray(state.profile?.favoriteBookIds) ? [...state.profile.favoriteBookIds] : [], active = current.includes(entryId);
+  if (!active && current.length >= 3) { toast("Your Top 3 is full. Unpin another favorite first."); return; }
+  const next = active ? current.filter((id) => id !== entryId) : [...current, entryId];
+  try {
+    await updateDoc(doc(db, "members", state.user.uid), { favoriteBookIds: next });
+    state.profile = { ...state.profile, favoriteBookIds: next };
+    state.openProfileMember = { ...state.openProfileMember, favoriteBookIds: next };
+    const member = state.members.find((item) => item.id === state.user.uid); if (member) member.favoriteBookIds = next;
+    renderShelf(state.shelfEntries);
+    const button = $("favoriteToggle"); if (button) { button.setAttribute("aria-pressed", String(!active)); button.classList.toggle("is-favorite", !active); button.textContent = active ? "Add to my Top 3" : "Remove from my Top 3"; }
+    toast(active ? "Removed from your Top 3." : "Pinned to your Top 3 favorites.");
+  } catch (error) { console.error(error); toast("Could not update your favorites."); }
 }
 
 function openBookDetails(book, personal = false) {
@@ -472,14 +630,17 @@ function openBookDetails(book, personal = false) {
   const about = book.synopsis || "";
   const canEditShelf = personal && isMember() && state.user?.uid === state.openProfileId;
   const canEditPublic = !personal && isOfficer();
-  const shelfEditor = canEditShelf ? `<form id="detailShelfStatusForm" class="book-status-form"><label>Move this book to <select id="detailShelfStatus">${shelfStatusOptions(book.status || "reading")}</select></label><button class="button" type="submit">Update status</button><button id="removeShelfBook" class="text-button danger-button" type="button">Remove from my shelf</button><p id="bookDetailMessage" class="form-message" aria-live="polite"></p></form>` : "";
+  const isFavorite = canEditShelf && (state.profile?.favoriteBookIds || []).includes(book.id);
+  const shelfEditor = canEditShelf ? `<button id="favoriteToggle" type="button" class="favorite-toggle${isFavorite ? " is-favorite" : ""}" aria-pressed="${String(isFavorite)}">${isFavorite ? "Remove from my Top 3" : "Add to my Top 3"}</button><form id="detailShelfStatusForm" class="book-status-form"><label>Move this book to <select id="detailShelfStatus">${shelfStatusOptions(book.status || "reading")}</select></label><button class="button" type="submit">Update status</button><button id="removeShelfBook" class="text-button danger-button" type="button">Remove from my shelf</button><p id="bookDetailMessage" class="form-message" aria-live="polite"></p></form>` : "";
   const publicEditor = canEditPublic ? `<form id="bookEditForm" class="book-edit-form"><h3>Officer book details</h3><label>Title <input id="bookEditTitle" maxlength="160" value="${escapeHtml(title)}" required></label><label>Author <input id="bookEditAuthor" maxlength="100" value="${escapeHtml(book.author || "")}" required></label><label>Genre <input id="bookEditGenre" maxlength="80" value="${escapeHtml(book.genre || "")}"></label><label>Cover URL <input id="bookEditCover" type="url" maxlength="500" value="${escapeHtml(book.coverUrl || "")}"></label><label>Or upload a cover <input id="bookEditCoverFile" type="file" accept="image/*"></label><label>About the book <textarea id="bookEditSynopsis" maxlength="3000">${escapeHtml(about)}</textarea></label><button class="button" type="submit">Save book details</button><p id="bookEditMessage" class="form-message" aria-live="polite"></p></form>` : "";
   const personalDetails = `<p><strong>${escapeHtml(String(book.status || "reading").replace(/-/g, " "))}</strong></p>${book.note ? `<p><strong>Reader’s note</strong><br>${escapeHtml(book.note)}</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${shelfEditor}`;
   const discussion = `<section class="book-discussion"><h3>Club discussion</h3><div id="bookCommentList" class="book-comment-list">${renderCommentList(book.comments || [])}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><label for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can join the discussion after signing in.</p>'}</section>`;
-  const publicDetails = `${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${discussion}${publicEditor}`;
+  const reroll = !personal && state.randomPickerActive ? '<button type="button" class="button button-quiet surprise-again" data-surprise-again>🎲 Pick another book</button>' : "";
+  const publicDetails = `${reroll}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${discussion}${publicEditor}`;
   ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup({ ...book, title })}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div></div>`;
-  showDialog(ui.bookDialog);
+  if (!ui.bookDialog.open) showDialog(ui.bookDialog);
   $("detailShelfStatusForm")?.addEventListener("submit", (event) => updateShelfStatus(event, book.id));
+  $("favoriteToggle")?.addEventListener("click", () => toggleFavorite(book.id));
   $("removeShelfBook")?.addEventListener("click", () => removeShelfBook(book.id, title));
   $("bookCommentForm")?.addEventListener("submit", (event) => postBookComment(event, book.id));
   $("bookEditForm")?.addEventListener("submit", (event) => saveBookMetadata(event, book.id));
@@ -497,7 +658,16 @@ async function loadLegacyRecommendation(bookId) {
 
 async function removeShelfBook(entryId, title) {
   if (!isMember() || state.openProfileId !== state.user?.uid || !window.confirm(`Remove “${title}” from your personal shelf?`)) return;
-  try { await deleteDoc(doc(db, "memberShelves", state.openProfileId, "entries", entryId)); closeDialog(ui.bookDialog); toast("Removed from your personal shelf."); }
+  try {
+    const favoriteIds = Array.isArray(state.profile?.favoriteBookIds) ? state.profile.favoriteBookIds : [];
+    if (favoriteIds.includes(entryId)) {
+      const next = favoriteIds.filter((id) => id !== entryId), batch = writeBatch(db);
+      batch.delete(doc(db, "memberShelves", state.openProfileId, "entries", entryId));
+      batch.update(doc(db, "members", state.user.uid), { favoriteBookIds: next });
+      await batch.commit(); state.profile = { ...state.profile, favoriteBookIds: next }; state.openProfileMember = { ...state.openProfileMember, favoriteBookIds: next };
+    } else await deleteDoc(doc(db, "memberShelves", state.openProfileId, "entries", entryId));
+    closeDialog(ui.bookDialog); toast("Removed from your personal shelf.");
+  }
   catch (error) { console.error(error); $("bookDetailMessage").textContent = "Could not remove this book."; }
 }
 
@@ -513,6 +683,7 @@ async function postBookComment(event, bookId) {
       await updateDoc(doc(db, "books", bookId), { comments: arrayUnion(comment) });
       const book = state.books.find((item) => item.id === bookId);
       if (book) book.comments = [...(book.comments || []), comment];
+      if (book) await recordActivity("discussed_book", book, { publicBookId: bookId });
       $("bookCommentList").innerHTML = renderCommentList(book?.comments || [comment]);
       event.currentTarget.reset();
       $("bookCommentMessage").textContent = "Your note is part of the club discussion.";
@@ -529,6 +700,7 @@ async function updateShelfStatus(event, entryId) {
   const status = $("detailShelfStatus")?.value;
   const entry = state.shelfEntries.find((item) => item.id === entryId);
   if (!status || !entry) return;
+  if (entry.status === status) { $("bookDetailMessage").textContent = "That book is already in this reading section."; return; }
   const button = event.currentTarget.querySelector("button[type=submit]");
   await runBusy(button, "Updating…", async () => {
     try {
@@ -540,6 +712,7 @@ async function updateShelfStatus(event, entryId) {
         note: entry.note || "",
         date: entry.date || new Date().toISOString()
       }, { merge: true });
+      await recordActivity(activityTypeForStatus(status), { ...entry, status }, { shelfEntryId: entryId, key: `${entryId}_${status}` });
       $("bookDetailMessage").textContent = "Reading status updated for everyone who views your shelf.";
       toast("Reading status updated.");
     } catch (error) {
@@ -583,15 +756,18 @@ async function addShelfBook(event) {
       if (existing) { toast(`“${candidate.title}” is already on your personal shelf. Open its cover to change the reading status.`); return; }
       const file = $("shelfFile")?.files?.[0];
       const coverUrl = $("shelfCover").value.trim() || (file ? await uploadImage(file) : "");
-      await addDoc(collection(db, "memberShelves", state.openProfileId, "entries"), {
+      const status = $("shelfStatus").value;
+      const shelfBook = {
         title: candidate.title,
         author: candidate.author,
         genre: $("shelfGenre").value.trim(),
         coverUrl,
-        status: $("shelfStatus").value,
+        status,
         note: $("shelfNote").value.trim(),
         date: new Date().toISOString()
-      });
+      };
+      const added = await addDoc(collection(db, "memberShelves", state.openProfileId, "entries"), shelfBook);
+      await recordActivity(activityTypeForStatus(status), shelfBook, { shelfEntryId: added.id, key: `${added.id}_${status}` });
       event.currentTarget.reset();
       toast(shelfAddedMessage());
     } catch (error) {
@@ -601,8 +777,9 @@ async function addShelfBook(event) {
   });
 }
 
-onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
-onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); }, () => { ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
+onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
+onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
+onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.activityLoaded = true; renderActivityFeed(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { const pick = snapshot.data() || {}; state.currentPickId = pick.bookId || null; state.monthAccent = /^#[0-9a-f]{6}$/i.test(pick.highlightColor || "") ? pick.highlightColor : "#d8e66f"; if ($("monthAccent")) $("monthAccent").value = state.monthAccent; renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { toast("Book of the Month could not load."); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement yet—check back after the next library meeting."; if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
 onSnapshot(doc(db, "siteSettings", "catalog"), (snapshot) => {
@@ -621,25 +798,28 @@ onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot
 onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
 
 ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid));
-ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.stopShelf = null; });
+ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
 $("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(localStorage.getItem("becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-ui.search.addEventListener("input", (event) => { state.search = event.target.value; renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; renderBooks(); });
+ui.search.addEventListener("input", (event) => { state.search = event.target.value; sessionStorage.setItem("becShelfSearch", state.search); renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; sessionStorage.setItem("becShelfGenre", state.genre); renderBooks(); });
 ui.shelfPrevious.addEventListener("click", () => moveShelf(-1)); ui.shelfNext.addEventListener("click", () => moveShelf(1)); ui.shelfExpand.addEventListener("click", toggleShelfLayout); ui.books.addEventListener("scroll", updateShelfNavigation, { passive: true }); window.addEventListener("resize", updateShelfNavigation);
+ui.surprise.addEventListener("click", pickRandomBook);
 document.addEventListener("click", async (event) => {
   const close = event.target.closest("[data-close]");
   if (close) {
     const dialog = $(close.dataset.close);
     closeDialog(dialog);
-    if (dialog === ui.profileDialog) { state.stopShelf?.(); state.stopShelf = null; }
+    if (dialog === ui.profileDialog) { state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; }
   }
+  const surpriseAgain = event.target.closest("[data-surprise-again]");
+  if (surpriseAgain) pickRandomBook();
   const catalogResult = event.target.closest("[data-catalog-result]");
   if (catalogResult) await selectCatalogBook(Number(catalogResult.dataset.catalogResult));
   const monthDescriptionToggle = event.target.closest("[data-toggle-month-description]");
   if (monthDescriptionToggle) { const synopsis = $(monthDescriptionToggle.getAttribute("aria-controls")); const expanded = monthDescriptionToggle.getAttribute("aria-expanded") === "true"; synopsis?.classList.toggle("is-collapsed", expanded); monthDescriptionToggle.setAttribute("aria-expanded", String(!expanded)); monthDescriptionToggle.textContent = expanded ? "Read full description" : "Show less"; }
   const book = event.target.closest("[data-book-id]");
-  if (book) { const item = state.books.find((entry) => entry.id === book.dataset.bookId); if (item) openBookDetails(item); }
+  if (book) { const item = state.books.find((entry) => entry.id === book.dataset.bookId); if (item) { state.randomPickerActive = false; openBookDetails(item); } }
   const shelfBook = event.target.closest("[data-shelf-book-id]");
-  if (shelfBook) { const item = state.shelfEntries.find((entry) => entry.id === shelfBook.dataset.shelfBookId); if (item) openBookDetails(item, true); }
+  if (shelfBook) { const item = state.shelfEntries.find((entry) => entry.id === shelfBook.dataset.shelfBookId); if (item) { state.randomPickerActive = false; openBookDetails(item, true); } }
   const member = event.target.closest("[data-member-id]");
   if (member) openProfile(member.dataset.memberId);
   const approvePending = event.target.closest("[data-approve-pending]");
