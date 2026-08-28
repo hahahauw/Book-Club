@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=2";
 
@@ -14,7 +14,7 @@ const firebaseConfig = {
 
 const $ = (id) => document.getElementById(id);
 const ui = {
-  authStatus: $("authStatus"), signIn: $("signInButton"), signOut: $("signOutButton"), profile: $("profileButton"), theme: $("themeButton"), toast: $("toast"),
+  authStatus: $("authStatus"), signIn: $("signInButton"), signOut: $("signOutButton"), profile: $("profileButton"), theme: $("themeButton"), toast: $("toast"), notificationButton: $("notificationButton"), notificationBadge: $("notificationBadge"), notificationDialog: $("notificationDialog"), notificationList: $("notificationList"), notificationStatus: $("notificationStatus"), markNotificationsRead: $("markNotificationsRead"),
   announcementText: $("announcementText"), announcementForm: $("announcementForm"), announcementInput: $("announcementInput"), announcementStatus: $("announcementStatus"),
   month: $("bookOfMonth"), monthCommunity: $("monthCommunity"), monthRating: $("monthRating"), monthProgress: $("monthProgress"), monthForm: $("monthForm"), monthStars: $("monthStars"), monthFinished: $("monthFinished"), monthComment: $("monthComment"), monthMessage: $("monthMessage"), monthNotes: $("monthNotes"), monthOfficer: $("monthOfficer"), monthPicker: $("monthPicker"), saveMonth: $("saveMonthButton"),
   books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), shelfNavigation: $("shelfNavigation"), shelfPrevious: $("shelfPreviousButton"), shelfExpand: $("shelfExpandButton"), shelfNext: $("shelfNextButton"), surprise: $("surpriseBookButton"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
@@ -26,7 +26,10 @@ const ui = {
   members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
 };
 
-const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", events: [], memories: [], boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "" };
+const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", events: [], memories: [], boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
+const REACTION_OPTIONS = [
+  ["emotional", "😭", "Emotional"], ["slow_burn", "🐌", "Slow Burn"], ["mind_blown", "🤯", "Mind-blowing"], ["comfort_read", "🧸", "Comfort Read"], ["funny", "😂", "Funny"], ["devastating", "💀", "Devastating"], ["thought_provoking", "🧠", "Thought-provoking"], ["great_romance", "❤️", "Great Romance"], ["great_worldbuilding", "🌎", "Great Worldbuilding"], ["beautiful_writing", "✍️", "Beautiful Writing"]
+];
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -34,12 +37,15 @@ const auth = getAuth(app);
 function escapeHtml(value) { const box = document.createElement("div"); box.textContent = String(value ?? ""); return box.innerHTML; }
 function initials(name) { return String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); }
 function color(value) { return /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#ed7857"; }
+function asDate(value) { if (value?.toDate instanceof Function) return value.toDate(); if (Number.isFinite(value?.seconds)) return new Date(value.seconds * 1000); return new Date(value || ""); }
+function timeValue(value) { const date = asDate(value); return Number.isNaN(date.valueOf()) ? 0 : date.valueOf(); }
 function dateLabel(value) { const date = new Date(`${value || ""}T12:00:00`); return Number.isNaN(date.valueOf()) ? "Date to be announced" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
-function dateTimeLabel(value) { const date = new Date(value || ""); return Number.isNaN(date.valueOf()) ? "Recently" : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" }); }
+function dateTimeLabel(value) { const date = asDate(value); return Number.isNaN(date.valueOf()) ? "Recently" : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" }); }
+function dateTimeAttribute(value) { const date = asDate(value); return Number.isNaN(date.valueOf()) ? "" : date.toISOString(); }
 function recentFirst(items) { return [...items].sort((a, b) => String(b.date || b.updatedAt || "").localeCompare(String(a.date || a.updatedAt || ""))); }
-function newestActivities(items) { return [...items].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))); }
+function newestActivities(items) { return [...items].sort((a, b) => timeValue(b.createdAt) - timeValue(a.createdAt)); }
 function relativeTime(value) {
-  const date = new Date(value || ""), elapsed = date.valueOf() - Date.now();
+  const date = asDate(value), elapsed = date.valueOf() - Date.now();
   if (Number.isNaN(date.valueOf())) return "Recently";
   const units = [["year", 31536000000], ["month", 2592000000], ["week", 604800000], ["day", 86400000], ["hour", 3600000], ["minute", 60000]];
   const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
@@ -69,6 +75,7 @@ function activityAction(activity) {
     want_to_read: "saved for later",
     rated_book: "rated",
     discussed_book: "joined the discussion about",
+    replied_to_comment: "replied in the discussion about",
     recommended_book: "recommended"
   };
   return actions[activity.type] || "shared an update about";
@@ -128,7 +135,78 @@ async function clearOwnActivityHistory() {
   }
   return removed;
 }
-function setAuthUi() { const name = state.profile?.displayName || state.user?.displayName || "reader"; ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest"; ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember(); ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review."; if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; } syncPendingSubscription(); renderMonth(); renderEvents(); renderMemories(); renderBoard(); renderPending(); }
+
+function notificationCopy(notification) {
+  const actor = state.members.find((member) => member.id === notification.actorId)?.displayName || "A club member";
+  const book = state.books.find((item) => item.id === notification.bookId);
+  const event = state.events.find((item) => item.id === notification.eventId);
+  if (notification.type === "discussion_reply") return { icon: "↩", title: `${actor} replied to your discussion`, detail: book ? `Open the discussion about ${book.title}.` : "Open the book discussion." };
+  if (notification.type === "book_of_month_changed") return { icon: "📖", title: "A new Book of the Month was chosen", detail: book?.title || "See the club’s current read." };
+  if (notification.type === "announcement_updated") return { icon: "📢", title: "A new club announcement was posted", detail: "Open the announcement desk for the latest update." };
+  if (notification.type === "event_added") return { icon: "◇", title: "A new club event was added", detail: event?.title || "Open Upcoming Events for the details." };
+  return { icon: "✦", title: "There is a new club update", detail: "Open it to learn more." };
+}
+function renderNotifications() {
+  const notifications = newestActivities(state.notifications), unread = notifications.filter((item) => !item.read).length;
+  ui.notificationButton.hidden = !isMember(); ui.notificationBadge.hidden = unread === 0; ui.notificationBadge.textContent = unread >= 50 ? "50+" : String(unread); ui.notificationButton.setAttribute("aria-label", unread ? `Notifications, ${unread >= 50 ? "50 or more" : unread} unread` : "Notifications, none unread");
+  ui.markNotificationsRead.disabled = unread === 0;
+  ui.notificationList.removeAttribute("aria-busy");
+  ui.notificationList.innerHTML = notifications.length ? notifications.map((notification) => { const copy = notificationCopy(notification); return `<button type="button" class="notification-item${notification.read ? "" : " is-unread"}" data-notification-id="${escapeHtml(notification.id)}"><span class="notification-icon" aria-hidden="true">${copy.icon}</span><span class="notification-copy"><strong>${escapeHtml(copy.title)}</strong><span>${escapeHtml(copy.detail)}</span><time datetime="${escapeHtml(dateTimeAttribute(notification.createdAt))}">${escapeHtml(relativeTime(notification.createdAt))}</time></span>${notification.read ? "" : '<span class="notification-dot"><span class="visually-hidden">Unread</span></span>'}</button>`; }).join("") : '<p class="empty-state">You’re all caught up. Direct replies and important club updates will appear here.</p>';
+  ui.notificationStatus.textContent = notifications.length ? `${notifications.length} recent notification${notifications.length === 1 ? "" : "s"}.` : "No notifications yet.";
+}
+function syncNotificationSubscription() {
+  if (!isMember()) {
+    state.stopNotifications?.(); state.stopNotifications = null; state.notifications = []; renderNotifications(); return;
+  }
+  if (state.stopNotifications) return;
+  ui.notificationList.setAttribute("aria-busy", "true");
+  ui.notificationList.innerHTML = '<span class="skeleton skeleton-activity" aria-hidden="true"></span><span class="skeleton skeleton-activity" aria-hidden="true"></span>';
+  state.stopNotifications = onSnapshot(query(collection(db, "members", state.user.uid, "notifications"), orderBy("createdAt", "desc"), limit(50)), (snapshot) => { state.notifications = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderNotifications(); }, (error) => { console.warn("Notifications unavailable:", error); ui.notificationList.removeAttribute("aria-busy"); ui.notificationList.innerHTML = '<p class="empty-state">Notifications could not load. The rest of the site is still available.</p>'; ui.notificationStatus.textContent = "Notifications could not load."; });
+}
+async function createReplyNotification(book, parent, replyId) {
+  if (!isMember() || !parent?.memberId || parent.memberId === state.user.uid || parent.legacy) return false;
+  const notification = { type: "discussion_reply", actorId: state.user.uid, bookId: book.id, discussionId: parent.id, replyId, eventId: "", createdAt: serverTimestamp(), read: false, readAt: null };
+  try { await setDoc(doc(db, "members", parent.memberId, "notifications", `reply_${replyId}`), notification); return true; }
+  catch (error) { console.warn("Reply saved, but its private notification was not delivered:", error); return false; }
+}
+async function publishClubNotifications(type, identifiers = {}) {
+  if (!isOfficer()) return false;
+  const actorId = state.user.uid;
+  const notificationId = type === "book_of_month_changed" ? "book_of_month" : type === "announcement_updated" ? "announcement" : `event_${identifiers.eventId || "update"}`;
+  try {
+    let memberPool = state.members;
+    if (!memberPool.length) { const snapshot = await getDocs(query(collection(db, "members"), limit(100))); memberPool = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); }
+    const recipients = memberPool.filter((member) => member.id && member.id !== actorId && ["member", "officer"].includes(member.role)).slice(0, 100);
+    if (!recipients.length) return true;
+    // Small batches stay comfortably inside Firestore Security Rules' document-access limit.
+    for (let index = 0; index < recipients.length; index += 10) {
+      const batch = writeBatch(db), group = recipients.slice(index, index + 10);
+      group.forEach((member) => batch.set(doc(db, "members", member.id, "notifications", notificationId), { type, actorId, bookId: String(identifiers.bookId || ""), discussionId: "", replyId: "", eventId: String(identifiers.eventId || ""), createdAt: serverTimestamp(), read: false, readAt: null }));
+      await batch.commit();
+    }
+    return true;
+  } catch (error) { console.warn("Club update saved, but notifications were not delivered:", error); toast("The update was saved, but member notifications could not be delivered."); return false; }
+}
+async function markNotificationRead(id) {
+  const notification = state.notifications.find((item) => item.id === id); if (!notification || notification.read) return;
+  notification.read = true; renderNotifications();
+  try { await updateDoc(doc(db, "members", state.user.uid, "notifications", id), { read: true, readAt: serverTimestamp() }); }
+  catch (error) { console.warn(error); notification.read = false; renderNotifications(); toast("Could not mark that notification as read."); }
+}
+async function markAllNotificationsRead() {
+  const unread = state.notifications.filter((item) => !item.read); if (!unread.length) return;
+  const previous = unread.map((item) => item.id); unread.forEach((item) => { item.read = true; }); renderNotifications();
+  try { const batch = writeBatch(db); unread.forEach((item) => batch.update(doc(db, "members", state.user.uid, "notifications", item.id), { read: true, readAt: serverTimestamp() })); await batch.commit(); toast("Notifications marked as read."); }
+  catch (error) { console.warn(error); state.notifications.forEach((item) => { if (previous.includes(item.id)) item.read = false; }); renderNotifications(); toast("Could not mark every notification as read."); }
+}
+async function openNotificationTarget(id) {
+  const notification = state.notifications.find((item) => item.id === id); if (!notification) return;
+  await markNotificationRead(id); closeDialog(ui.notificationDialog);
+  if (notification.type === "discussion_reply") { const book = state.books.find((item) => item.id === notification.bookId); if (book) { state.randomPickerActive = false; openBookDetails(book); requestAnimationFrame(() => $("bookCommentList")?.scrollIntoView({ behavior: "smooth", block: "start" })); } else toast("That book is no longer on the public shelf."); return; }
+  const target = notification.type === "book_of_month_changed" ? $("monthHeading") : notification.type === "announcement_updated" ? $("announcementHeading") : $("events");
+  requestAnimationFrame(() => target?.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+function setAuthUi() { const name = state.profile?.displayName || state.user?.displayName || "reader"; ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest"; ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember(); ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review."; if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; } syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); renderMonth(); renderEvents(); renderMemories(); renderBoard(); renderPending(); renderBookReactions(); }
 
 function optimizedImageUrl(url, width = 600) {
   const value = String(url || "");
@@ -430,6 +508,7 @@ async function ensureProfile(user) {
   return profile;
 }
 onAuthStateChanged(auth, async (user) => {
+  if (state.user?.uid !== user?.uid) { state.stopNotifications?.(); state.stopNotifications = null; state.notifications = []; }
   state.user = user; state.profile = null;
   if (!user) return setAuthUi();
   try { state.profile = await ensureProfile(user); if (!isMember()) toast("Your member record needs an officer to restore its role."); }
@@ -478,23 +557,25 @@ async function saveRating(event) {
 }
 async function saveMonth() {
   if (!isOfficer() || !ui.monthPicker.value) return;
+  const nextBookId = ui.monthPicker.value, changedBook = nextBookId !== state.currentPickId;
   await runBusy(ui.saveMonth, "Saving…", async () => {
-    try { await setDoc(doc(db, "siteSettings", "currentPick"), { bookId: ui.monthPicker.value, highlightColor: $("monthAccent")?.value || state.monthAccent, updatedAt: new Date().toISOString() }, { merge: true }); toast("Book of the Month updated."); }
+    try { await setDoc(doc(db, "siteSettings", "currentPick"), { bookId: nextBookId, highlightColor: $("monthAccent")?.value || state.monthAccent, updatedAt: new Date().toISOString() }, { merge: true }); if (changedBook) await publishClubNotifications("book_of_month_changed", { bookId: nextBookId }); toast("Book of the Month updated."); }
     catch (error) { console.error(error); toast("Could not set the Book of the Month."); }
   });
 }
 
 async function saveAnnouncement(event) {
   event.preventDefault(); if (!isOfficer()) return;
+  const nextAnnouncement = ui.announcementInput.value.trim(), changedAnnouncement = nextAnnouncement !== state.announcement;
   const button = event.currentTarget.querySelector("button[type=submit]");
   await runBusy(button, "Saving…", async () => {
-    try { await setDoc(doc(db, "siteSettings", "announcement"), { text: ui.announcementInput.value.trim(), updatedAt: new Date().toISOString() }); ui.announcementStatus.textContent = "Announcement saved for everyone."; }
+    try { await setDoc(doc(db, "siteSettings", "announcement"), { text: nextAnnouncement, updatedAt: new Date().toISOString() }); if (changedAnnouncement && nextAnnouncement) await publishClubNotifications("announcement_updated"); ui.announcementStatus.textContent = "Announcement saved for everyone."; }
     catch (error) { console.error(error); ui.announcementStatus.textContent = "Could not save the announcement."; }
   });
 }
 
 function renderEvents() { ui.events.innerHTML = state.events.length ? [...state.events].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((event) => `<article class="event"><time>${escapeHtml(dateLabel(event.date))}</time><div><h3>${escapeHtml(event.title)}</h3>${event.details ? `<p>${escapeHtml(event.details)}</p>` : ""}</div>${isOfficer() ? `<button class="text-button" type="button" data-remove-event="${event.id}">Remove</button>` : ""}</article>`).join("") : '<p class="empty-state">No events have been added yet.</p>'; }
-async function addEvent(event) { event.preventDefault(); if (!isOfficer()) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Adding…", async () => { try { await addDoc(collection(db, "events"), { title: ui.eventTitle.value.trim(), date: ui.eventDate.value, details: ui.eventDetails.value.trim(), createdAt: new Date().toISOString() }); ui.eventForm.reset(); toast("Event added."); } catch (error) { console.error(error); toast("Could not add the event."); } }); }
+async function addEvent(event) { event.preventDefault(); if (!isOfficer()) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Adding…", async () => { try { const added = await addDoc(collection(db, "events"), { title: ui.eventTitle.value.trim(), date: ui.eventDate.value, details: ui.eventDetails.value.trim(), createdAt: new Date().toISOString() }); await publishClubNotifications("event_added", { eventId: added.id }); ui.eventForm.reset(); toast("Event added."); } catch (error) { console.error(error); toast("Could not add the event."); } }); }
 function renderMemories() { ui.memories.innerHTML = state.memories.length ? recentFirst(state.memories).map((memory) => `<article class="memory"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 800))}" alt="${escapeHtml(memory.title)}" loading="lazy" decoding="async" width="800" height="540"><div><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3></div>${isOfficer() ? `<button class="remove-button" type="button" data-remove-memory="${memory.id}" aria-label="Remove memory">×</button>` : ""}</article>`).join("") : '<p class="empty-state">The club’s first reading memory will appear here soon.</p>'; }
 async function addMemory(event) { event.preventDefault(); if (!isOfficer()) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Adding…", async () => { try { const imageUrl = ui.memoryImage.value.trim() || await uploadImage(ui.memoryFile.files?.[0]); if (!imageUrl) throw new Error("Add an image URL or choose a photo."); await addDoc(collection(db, "memories"), { imageUrl, title: ui.memoryCaption.value.trim(), category: ui.memoryCategory.value.trim(), date: new Date().toISOString() }); ui.memoryForm.reset(); toast("Memory added."); } catch (error) { console.error(error); toast(error.message || "Could not add the memory."); } }); }
 async function addInvite(event) { event.preventDefault(); if (!isOfficer()) return; const email = ui.inviteEmail.value.trim().toLowerCase(); if (!email) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Approving…", async () => { try { await setDoc(doc(db, "allowedEmails", email), { email, invitedAt: new Date().toISOString() }); ui.inviteForm.reset(); toast("That email can now create a member library."); } catch (error) { console.error(error); toast("Could not approve that email."); } }); }
@@ -586,8 +667,111 @@ async function saveProfileCard(event) {
   });
 }
 function shelfStatusOptions(value) { return [["reading", "Reading"], ["read", "Read"], ["want-to-read", "Want to read"]].map(([key, label]) => `<option value="${key}" ${key === value ? "selected" : ""}>${label}</option>`).join(""); }
+function legacyCommentId(comment, index) {
+  const seed = `${comment?.name || ""}|${comment?.text || ""}|${comment?.date || ""}|${index}`;
+  let hash = 2166136261;
+  for (let position = 0; position < seed.length; position += 1) hash = Math.imul(hash ^ seed.charCodeAt(position), 16777619);
+  return `legacy_${index}_${(hash >>> 0).toString(36)}`;
+}
+function normalizeLegacyComments(comments = []) {
+  return comments.map((comment, index) => {
+    const id = legacyCommentId(comment, index);
+    return { id, memberId: "", name: comment.name || "Club member", text: comment.text || "", createdAt: comment.date || "", parentId: "", rootId: id, spoiler: false, spoilerScope: "", legacy: true };
+  });
+}
+function combinedBookComments() {
+  return [...state.legacyBookComments, ...state.bookComments];
+}
+function orderedBookComments(comments) {
+  const byId = new Map(comments.map((comment) => [comment.id, comment]));
+  const roots = comments.filter((comment) => !comment.parentId || !byId.has(comment.rootId)).sort((a, b) => timeValue(a.createdAt) - timeValue(b.createdAt));
+  const included = new Set(); const result = [];
+  roots.forEach((root) => {
+    result.push(root); included.add(root.id);
+    comments.filter((comment) => comment.id !== root.id && comment.rootId === root.id).sort((a, b) => timeValue(a.createdAt) - timeValue(b.createdAt)).forEach((reply) => { result.push(reply); included.add(reply.id); });
+  });
+  comments.filter((comment) => !included.has(comment.id)).sort((a, b) => timeValue(a.createdAt) - timeValue(b.createdAt)).forEach((comment) => result.push(comment));
+  return result;
+}
 function renderCommentList(comments = []) {
-  return comments.length ? comments.map((comment) => `<article class="book-comment"><span class="comment-avatar">${escapeHtml(initials(comment.name))}</span><div><p><strong>${escapeHtml(comment.name || "Club member")}</strong><time>${escapeHtml(dateTimeLabel(comment.date))}</time></p><div>${escapeHtml(comment.text)}</div></div></article>`).join("") : '<p class="empty-state">No discussion notes yet. A member can start the conversation.</p>';
+  if (!comments.length) return '<p class="empty-state">No discussion notes yet. A member can start the conversation.</p>';
+  const byId = new Map(comments.map((comment) => [comment.id, comment]));
+  return orderedBookComments(comments).map((comment) => {
+    const parent = byId.get(comment.parentId), isReply = Boolean(comment.parentId);
+    const replyLabel = isReply ? `<span class="comment-thread">Replying to ${escapeHtml(parent?.name || "an earlier note")}</span>` : "";
+    const content = comment.spoiler ? `<details class="spoiler-panel"><summary>Reveal spoiler${comment.spoilerScope ? ` · ${escapeHtml(comment.spoilerScope)}` : ""}</summary><p class="spoiler-text">${escapeHtml(comment.text)}</p></details>` : `<p class="comment-content">${escapeHtml(comment.text)}</p>`;
+    const replyAction = isMember() && !comment.legacy ? `<button type="button" class="text-button" data-reply-comment="${escapeHtml(comment.id)}">Reply</button>` : "";
+    return `<article class="book-comment${isReply ? " is-reply" : ""}" data-comment-id="${escapeHtml(comment.id)}"><span class="comment-avatar">${escapeHtml(initials(comment.name))}</span><div><header class="comment-header"><strong>${escapeHtml(comment.name || "Club member")}</strong><time datetime="${escapeHtml(dateTimeAttribute(comment.createdAt))}">${escapeHtml(dateTimeLabel(comment.createdAt))}</time></header>${replyLabel}${content}${replyAction ? `<div class="comment-actions">${replyAction}</div>` : ""}</div></article>`;
+  }).join("");
+}
+function renderBookComments() {
+  const target = $("bookCommentList"); if (!target) return;
+  target.removeAttribute("aria-busy"); target.innerHTML = renderCommentList(combinedBookComments());
+}
+function subscribeBookComments(bookId) {
+  state.stopBookComments?.(); state.stopBookComments = null; state.bookComments = []; renderBookComments();
+  const target = $("bookCommentList"); target?.setAttribute("aria-busy", "true");
+  state.stopBookComments = onSnapshot(query(collection(db, "books", bookId, "comments"), orderBy("createdAt", "desc"), limit(80)), (snapshot) => {
+    if (state.activeBookId !== bookId) return;
+    state.bookComments = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data(), legacy: false })); renderBookComments();
+  }, (error) => {
+    console.warn("Book discussion replies unavailable:", error); target?.removeAttribute("aria-busy");
+    const status = $("bookCommentMessage"); if (status) status.textContent = "Older notes are still visible, but new discussion replies could not load.";
+  });
+}
+function renderReplyContext() {
+  const context = $("bookReplyContext"), label = $("bookReplyLabel"); if (!context || !label) return;
+  context.hidden = !state.replyTarget;
+  label.textContent = state.replyTarget ? `Replying to ${state.replyTarget.name || "a club member"}` : "";
+  const formLabel = $("bookCommentFormLabel"); if (formLabel) formLabel.textContent = state.replyTarget ? "Write a reply" : "Add a note";
+}
+function setReplyTarget(commentId) {
+  const target = state.bookComments.find((comment) => comment.id === commentId); if (!target) return;
+  state.replyTarget = target; renderReplyContext(); $("bookCommentText")?.focus();
+}
+function clearReplyTarget() { state.replyTarget = null; renderReplyContext(); }
+function updateSpoilerScopeVisibility() {
+  const enabled = Boolean($("bookCommentSpoiler")?.checked), label = $("bookSpoilerScopeLabel");
+  if (label) label.hidden = !enabled;
+  if (!enabled && $("bookSpoilerScope")) $("bookSpoilerScope").value = "";
+}
+function renderBookReactions() {
+  const summary = $("reactionSummary"), picker = $("reactionPicker"), status = $("reactionStatus"); if (!summary || !picker) return;
+  const counts = new Map(); state.bookReactions.forEach((item) => counts.set(item.reaction, (counts.get(item.reaction) || 0) + 1));
+  const active = REACTION_OPTIONS.filter(([code]) => counts.has(code));
+  summary.innerHTML = active.length ? active.map(([code, emoji, label]) => `<span class="reaction-summary-chip"><span aria-hidden="true">${emoji}</span>${escapeHtml(label)} <strong>${counts.get(code)}</strong></span>`).join("") : '<p class="empty-state">No reactions yet. Members can add the first one.</p>';
+  const mine = state.bookReactions.find((item) => item.memberId === state.user?.uid)?.reaction || "";
+  picker.innerHTML = isMember() ? REACTION_OPTIONS.map(([code, emoji, label]) => `<button type="button" class="reaction-chip${mine === code ? " is-selected" : ""}" data-book-reaction="${code}" aria-pressed="${String(mine === code)}" ${state.reactionBusy ? "disabled" : ""}><span aria-hidden="true">${emoji}</span>${escapeHtml(label)}</button>`).join("") : '<p class="form-message">Sign in with an invited member account to add a reaction.</p>';
+  if (status && !state.reactionBusy && !status.dataset.keepMessage) status.textContent = mine ? "Your reaction is visible in the total." : "Choose one reaction that fits this book.";
+}
+function subscribeBookReactions(bookId) {
+  state.stopBookReactions?.(); state.stopBookReactions = null; state.reactionBookId = bookId; state.bookReactions = []; renderBookReactions();
+  state.stopBookReactions = onSnapshot(query(collection(db, "books", bookId, "reactions"), limit(100)), (snapshot) => {
+    if (state.reactionBookId !== bookId) return;
+    state.bookReactions = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBookReactions();
+  }, (error) => { console.warn("Book reactions unavailable:", error); const status = $("reactionStatus"); if (status) { status.dataset.keepMessage = "true"; status.textContent = "Reactions could not load, but the rest of the book details still work."; } });
+}
+async function toggleBookReaction(reaction) {
+  if (!isMember() || state.reactionBusy || !state.reactionBookId || !REACTION_OPTIONS.some(([code]) => code === reaction)) return;
+  const bookId = state.reactionBookId;
+  const previous = state.bookReactions.map((item) => ({ ...item })), mine = state.bookReactions.find((item) => item.memberId === state.user.uid), removing = mine?.reaction === reaction;
+  state.reactionBusy = true;
+  state.bookReactions = state.bookReactions.filter((item) => item.memberId !== state.user.uid);
+  if (!removing) state.bookReactions.push({ id: state.user.uid, memberId: state.user.uid, reaction, updatedAt: new Date() });
+  renderBookReactions();
+  const status = $("reactionStatus"); if (status) { delete status.dataset.keepMessage; status.textContent = removing ? "Removing your reaction…" : "Saving your reaction…"; }
+  try {
+    const ref = doc(db, "books", bookId, "reactions", state.user.uid);
+    if (removing) await deleteDoc(ref); else await setDoc(ref, { memberId: state.user.uid, reaction, updatedAt: serverTimestamp() });
+    if (state.reactionBookId === bookId && status) status.textContent = removing ? "Reaction removed." : "Reaction saved for the club.";
+  } catch (error) {
+    console.error(error);
+    if (state.reactionBookId === bookId) { state.bookReactions = previous; if (status) { status.dataset.keepMessage = "true"; status.textContent = "Could not save that reaction. Check your connection and try again."; } }
+  } finally { if (state.reactionBookId === bookId) { state.reactionBusy = false; renderBookReactions(); } }
+}
+function stopBookSocialSubscriptions() {
+  state.stopBookComments?.(); state.stopBookComments = null; state.stopBookReactions?.(); state.stopBookReactions = null;
+  state.activeBookId = null; state.reactionBookId = null; state.legacyBookComments = []; state.bookComments = []; state.bookReactions = []; state.replyTarget = null; state.reactionBusy = false;
 }
 function renderShelf(entries) {
   const stats = $("libraryStats"), shelf = $("personalBooks"), snapshot = $("readingSnapshot"), favorites = $("favoriteBooks");
@@ -625,6 +809,7 @@ async function toggleFavorite(entryId) {
 }
 
 function openBookDetails(book, personal = false) {
+  stopBookSocialSubscriptions();
   const title = book.title || "Untitled book";
   ui.bookDialog.setAttribute("aria-label", `Book details: ${title}`);
   const about = book.synopsis || "";
@@ -634,16 +819,20 @@ function openBookDetails(book, personal = false) {
   const shelfEditor = canEditShelf ? `<button id="favoriteToggle" type="button" class="favorite-toggle${isFavorite ? " is-favorite" : ""}" aria-pressed="${String(isFavorite)}">${isFavorite ? "Remove from my Top 3" : "Add to my Top 3"}</button><form id="detailShelfStatusForm" class="book-status-form"><label>Move this book to <select id="detailShelfStatus">${shelfStatusOptions(book.status || "reading")}</select></label><button class="button" type="submit">Update status</button><button id="removeShelfBook" class="text-button danger-button" type="button">Remove from my shelf</button><p id="bookDetailMessage" class="form-message" aria-live="polite"></p></form>` : "";
   const publicEditor = canEditPublic ? `<form id="bookEditForm" class="book-edit-form"><h3>Officer book details</h3><label>Title <input id="bookEditTitle" maxlength="160" value="${escapeHtml(title)}" required></label><label>Author <input id="bookEditAuthor" maxlength="100" value="${escapeHtml(book.author || "")}" required></label><label>Genre <input id="bookEditGenre" maxlength="80" value="${escapeHtml(book.genre || "")}"></label><label>Cover URL <input id="bookEditCover" type="url" maxlength="500" value="${escapeHtml(book.coverUrl || "")}"></label><label>Or upload a cover <input id="bookEditCoverFile" type="file" accept="image/*"></label><label>About the book <textarea id="bookEditSynopsis" maxlength="3000">${escapeHtml(about)}</textarea></label><button class="button" type="submit">Save book details</button><p id="bookEditMessage" class="form-message" aria-live="polite"></p></form>` : "";
   const personalDetails = `<p><strong>${escapeHtml(String(book.status || "reading").replace(/-/g, " "))}</strong></p>${book.note ? `<p><strong>Reader’s note</strong><br>${escapeHtml(book.note)}</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${shelfEditor}`;
-  const discussion = `<section class="book-discussion"><h3>Club discussion</h3><div id="bookCommentList" class="book-comment-list">${renderCommentList(book.comments || [])}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><label for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can join the discussion after signing in.</p>'}</section>`;
+  if (!personal) { state.activeBookId = book.id; state.legacyBookComments = normalizeLegacyComments(book.comments || []); }
+  const reactions = `<section class="book-reactions" aria-labelledby="reactionHeading"><div><h3 id="reactionHeading">Quick reactions</h3><p>A small pulse-check from club readers. Each member gets one reaction per book.</p></div><div id="reactionSummary" class="reaction-summary" aria-live="polite"><p class="empty-state">Loading reactions…</p></div><div id="reactionPicker" class="reaction-picker"></div><p id="reactionStatus" class="form-message" aria-live="polite"></p></section>`;
+  const discussion = `<section class="book-discussion" aria-labelledby="bookDiscussionHeading"><h3 id="bookDiscussionHeading">Club discussion</h3><p class="catalog-meta">Leave a note, reply to another reader, or tuck spoilers safely behind a warning.</p><div id="bookCommentList" class="book-comment-list">${renderCommentList(state.legacyBookComments)}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><div id="bookReplyContext" class="reply-context" hidden><span id="bookReplyLabel"></span><button type="button" class="text-button" data-cancel-reply>Cancel reply</button></div><label id="bookCommentFormLabel" for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><div class="comment-options"><label class="spoiler-toggle"><input id="bookCommentSpoiler" type="checkbox"> Hide this note as a spoiler</label><label id="bookSpoilerScopeLabel" hidden>Spoiler label (optional)<input id="bookSpoilerScope" maxlength="80" placeholder="For example: ending or chapter 12"></label></div><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can read everything here, then join the discussion after signing in.</p>'}</section>`;
   const reroll = !personal && state.randomPickerActive ? '<button type="button" class="button button-quiet surprise-again" data-surprise-again>🎲 Pick another book</button>' : "";
-  const publicDetails = `${reroll}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${discussion}${publicEditor}`;
+  const publicDetails = `${reroll}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${reactions}${discussion}${publicEditor}`;
   ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup({ ...book, title })}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div></div>`;
   if (!ui.bookDialog.open) showDialog(ui.bookDialog);
   $("detailShelfStatusForm")?.addEventListener("submit", (event) => updateShelfStatus(event, book.id));
   $("favoriteToggle")?.addEventListener("click", () => toggleFavorite(book.id));
   $("removeShelfBook")?.addEventListener("click", () => removeShelfBook(book.id, title));
   $("bookCommentForm")?.addEventListener("submit", (event) => postBookComment(event, book.id));
+  $("bookCommentSpoiler")?.addEventListener("change", updateSpoilerScopeVisibility);
   $("bookEditForm")?.addEventListener("submit", (event) => saveBookMetadata(event, book.id));
+  if (!personal) { subscribeBookComments(book.id); subscribeBookReactions(book.id); }
   if (!personal && !book.why) loadLegacyRecommendation(book.id);
 }
 
@@ -673,23 +862,31 @@ async function removeShelfBook(entryId, title) {
 
 async function postBookComment(event, bookId) {
   event.preventDefault();
-  if (!isMember()) return;
+  if (!isMember() || state.activeBookId !== bookId) return;
   const text = $("bookCommentText")?.value.trim();
   if (!text) return;
+  const parent = state.replyTarget && state.bookComments.find((comment) => comment.id === state.replyTarget.id);
+  const spoiler = Boolean($("bookCommentSpoiler")?.checked), spoilerScope = spoiler ? ($("bookSpoilerScope")?.value.trim() || "").slice(0, 80) : "";
+  const signature = `${bookId}|${parent?.id || "root"}|${text}|${spoiler}|${spoilerScope}`;
+  if (state.lastCommentPost?.signature === signature && Date.now() - state.lastCommentPost.time < 8000) { $("bookCommentMessage").textContent = "That note was already posted a moment ago."; return; }
   const button = event.currentTarget.querySelector("button[type=submit]");
   await runBusy(button, "Posting…", async () => {
     try {
-      const comment = { name: state.profile.displayName || "Club member", text, date: new Date().toISOString() };
-      await updateDoc(doc(db, "books", bookId), { comments: arrayUnion(comment) });
       const book = state.books.find((item) => item.id === bookId);
-      if (book) book.comments = [...(book.comments || []), comment];
-      if (book) await recordActivity("discussed_book", book, { publicBookId: bookId });
-      $("bookCommentList").innerHTML = renderCommentList(book?.comments || [comment]);
-      event.currentTarget.reset();
-      $("bookCommentMessage").textContent = "Your note is part of the club discussion.";
+      if (!book) throw new Error("This book is no longer available.");
+      const commentRef = doc(collection(db, "books", bookId, "comments"));
+      const comment = { memberId: state.user.uid, name: state.profile.displayName || "Club member", text, createdAt: serverTimestamp(), parentId: parent?.id || "", rootId: parent ? (parent.rootId || parent.id) : commentRef.id, spoiler, spoilerScope };
+      await setDoc(commentRef, comment);
+      state.lastCommentPost = { signature, time: Date.now() };
+      await recordActivity(parent ? "replied_to_comment" : "discussed_book", book, { publicBookId: bookId, key: commentRef.id });
+      if (parent) await createReplyNotification(book, parent, commentRef.id);
+      if (state.activeBookId === bookId) {
+        event.currentTarget.reset(); clearReplyTarget(); updateSpoilerScopeVisibility();
+        $("bookCommentMessage").textContent = parent ? "Your reply is part of the conversation." : "Your note is part of the club discussion.";
+      }
     } catch (error) {
       console.error(error);
-      $("bookCommentMessage").textContent = "Could not post your note. Check your connection and try again.";
+      if (state.activeBookId === bookId && $("bookCommentMessage")) $("bookCommentMessage").textContent = error.message === "This book is no longer available." ? error.message : "Could not post your note. Check your connection and try again.";
     }
   });
 }
@@ -777,8 +974,8 @@ async function addShelfBook(event) {
   });
 }
 
-onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
-onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
+onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); renderNotifications(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
+onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); renderNotifications(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
 onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.activityLoaded = true; renderActivityFeed(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { const pick = snapshot.data() || {}; state.currentPickId = pick.bookId || null; state.monthAccent = /^#[0-9a-f]{6}$/i.test(pick.highlightColor || "") ? pick.highlightColor : "#d8e66f"; if ($("monthAccent")) $("monthAccent").value = state.monthAccent; renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { toast("Book of the Month could not load."); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement yet—check back after the next library meeting."; if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
@@ -793,12 +990,15 @@ onSnapshot(doc(db, "siteSettings", "catalog"), (snapshot) => {
     ui.uploadPreset.value = state.uploadPreset;
   }
 }, (error) => console.warn("Catalogue settings unavailable:", error));
-onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderEvents(); }, () => { ui.events.innerHTML = '<p class="empty-state">Events are unavailable right now.</p>'; });
+onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderEvents(); renderNotifications(); }, () => { ui.events.innerHTML = '<p class="empty-state">Events are unavailable right now.</p>'; });
 onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMemories(); }, () => { ui.memories.innerHTML = '<p class="empty-state">Reading memories are unavailable right now.</p>'; });
 onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
 
 ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid));
 ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
+ui.bookDialog.addEventListener("close", stopBookSocialSubscriptions);
+ui.notificationButton.addEventListener("click", () => { renderNotifications(); showDialog(ui.notificationDialog); });
+ui.markNotificationsRead.addEventListener("click", markAllNotificationsRead);
 $("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(localStorage.getItem("becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 ui.search.addEventListener("input", (event) => { state.search = event.target.value; sessionStorage.setItem("becShelfSearch", state.search); renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; sessionStorage.setItem("becShelfGenre", state.genre); renderBooks(); });
 ui.shelfPrevious.addEventListener("click", () => moveShelf(-1)); ui.shelfNext.addEventListener("click", () => moveShelf(1)); ui.shelfExpand.addEventListener("click", toggleShelfLayout); ui.books.addEventListener("scroll", updateShelfNavigation, { passive: true }); window.addEventListener("resize", updateShelfNavigation);
@@ -812,6 +1012,13 @@ document.addEventListener("click", async (event) => {
   }
   const surpriseAgain = event.target.closest("[data-surprise-again]");
   if (surpriseAgain) pickRandomBook();
+  const notification = event.target.closest("[data-notification-id]");
+  if (notification) await openNotificationTarget(notification.dataset.notificationId);
+  const reply = event.target.closest("[data-reply-comment]");
+  if (reply) setReplyTarget(reply.dataset.replyComment);
+  if (event.target.closest("[data-cancel-reply]")) clearReplyTarget();
+  const reaction = event.target.closest("[data-book-reaction]");
+  if (reaction) await toggleBookReaction(reaction.dataset.bookReaction);
   const catalogResult = event.target.closest("[data-catalog-result]");
   if (catalogResult) await selectCatalogBook(Number(catalogResult.dataset.catalogResult));
   const monthDescriptionToggle = event.target.closest("[data-toggle-month-description]");
