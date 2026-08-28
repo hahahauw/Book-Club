@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=2";
 
@@ -19,14 +19,15 @@ const ui = {
   month: $("bookOfMonth"), monthCommunity: $("monthCommunity"), monthRating: $("monthRating"), monthProgress: $("monthProgress"), monthForm: $("monthForm"), monthStars: $("monthStars"), monthFinished: $("monthFinished"), monthComment: $("monthComment"), monthMessage: $("monthMessage"), monthNotes: $("monthNotes"), monthOfficer: $("monthOfficer"), monthPicker: $("monthPicker"), saveMonth: $("saveMonthButton"),
   books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), shelfNavigation: $("shelfNavigation"), shelfPrevious: $("shelfPreviousButton"), shelfExpand: $("shelfExpandButton"), shelfNext: $("shelfNextButton"), surprise: $("surpriseBookButton"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
   activityFeed: $("activityFeed"), activityStatus: $("activityStatus"),
+  readingGoalContent: $("readingGoalContent"), readingGoalTotal: $("readingGoalTotal"), readingGoalForm: $("readingGoalForm"), readingGoalTitle: $("readingGoalTitle"), readingGoalTarget: $("readingGoalTarget"), readingGoalEndDate: $("readingGoalEndDate"), readingGoalStart: $("readingGoalStartButton"), readingGoalEnd: $("readingGoalEndButton"), readingGoalStatus: $("readingGoalStatus"),
   events: $("eventsList"), eventForm: $("eventForm"), eventTitle: $("eventTitle"), eventDate: $("eventDate"), eventDetails: $("eventDetails"),
   boardForm: $("boardForm"), boardText: $("boardText"), boardStatus: $("boardStatus"), boardGuestHint: $("boardGuestHint"), pinBoard: $("pinBoard"),
-  memories: $("memoriesGrid"), memoryForm: $("memoryForm"), memoryImage: $("memoryImage"), memoryFile: $("memoryFile"), memoryCaption: $("memoryCaption"), memoryCategory: $("memoryCategory"), inviteForm: $("inviteForm"), inviteEmail: $("inviteEmail"),
+  memories: $("memoriesGrid"), memoryForm: $("memoryForm"), memoryImage: $("memoryImage"), memoryFile: $("memoryFile"), memoryCaption: $("memoryCaption"), memoryCategory: $("memoryCategory"), memoryEvent: $("memoryEvent"), memoryBook: $("memoryBook"), memoryEditId: $("memoryEditId"), memorySave: $("memorySaveButton"), memoryCancelEdit: $("memoryCancelEdit"), memoryStatus: $("memoryStatus"), inviteForm: $("inviteForm"), inviteEmail: $("inviteEmail"),
   uploadSettingsForm: $("uploadSettingsForm"), cloudName: $("cloudName"), uploadPreset: $("uploadPreset"), googleBooksKey: $("googleBooksKey"), uploadSettingsStatus: $("uploadSettingsStatus"), suggestionHint: $("suggestionHint"),
   members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
 };
 
-const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", events: [], memories: [], boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
+const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", readingGoal: null, completedGoalBooks: [], goalProgressLoaded: false, stopGoalProgress: null, events: [], eventRsvps: new Map(), stopEventRsvps: null, eventRsvpOwnerId: null, rsvpBusy: new Set(), memories: [], memoryEditingId: null, boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
 const REACTION_OPTIONS = [
   ["emotional", "😭", "Emotional"], ["slow_burn", "🐌", "Slow Burn"], ["mind_blown", "🤯", "Mind-blowing"], ["comfort_read", "🧸", "Comfort Read"], ["funny", "😂", "Funny"], ["devastating", "💀", "Devastating"], ["thought_provoking", "🧠", "Thought-provoking"], ["great_romance", "❤️", "Great Romance"], ["great_worldbuilding", "🌎", "Great Worldbuilding"], ["beautiful_writing", "✍️", "Beautiful Writing"]
 ];
@@ -143,7 +144,7 @@ function notificationCopy(notification) {
   if (notification.type === "discussion_reply") return { icon: "↩", title: `${actor} replied to your discussion`, detail: book ? `Open the discussion about ${book.title}.` : "Open the book discussion." };
   if (notification.type === "book_of_month_changed") return { icon: "📖", title: "A new Book of the Month was chosen", detail: book?.title || "See the club’s current read." };
   if (notification.type === "announcement_updated") return { icon: "📢", title: "A new club announcement was posted", detail: "Open the announcement desk for the latest update." };
-  if (notification.type === "event_added") return { icon: "◇", title: "A new club event was added", detail: event?.title || "Open Upcoming Events for the details." };
+  if (notification.type === "event_added") return { icon: "◇", title: "A new club event was added", detail: event?.title || "Open Club Events for the details." };
   return { icon: "✦", title: "There is a new club update", detail: "Open it to learn more." };
 }
 function renderNotifications() {
@@ -206,7 +207,93 @@ async function openNotificationTarget(id) {
   const target = notification.type === "book_of_month_changed" ? $("monthHeading") : notification.type === "announcement_updated" ? $("announcementHeading") : $("events");
   requestAnimationFrame(() => target?.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
-function setAuthUi() { const name = state.profile?.displayName || state.user?.displayName || "reader"; ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest"; ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember(); ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review."; if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; } syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); renderMonth(); renderEvents(); renderMemories(); renderBoard(); renderPending(); renderBookReactions(); }
+
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear(), month = String(date.getMonth() + 1).padStart(2, "0"), day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function goalProgressCount() {
+  if (!state.readingGoal) return 0;
+  if (!state.readingGoal.active) return Math.max(0, Number(state.readingGoal.finalProgress || 0));
+  const started = timeValue(state.readingGoal.startAt), end = state.readingGoal.endDate ? new Date(`${state.readingGoal.endDate}T23:59:59.999`).valueOf() : Number.POSITIVE_INFINITY;
+  if (!started) return 0;
+  return state.completedGoalBooks.filter((entry) => { const finished = timeValue(entry.completedAt); return finished >= started && finished <= end; }).length;
+}
+function renderReadingGoal() {
+  const goal = state.readingGoal;
+  ui.readingGoalForm.hidden = !isOfficer();
+  ui.readingGoalEnd.hidden = !isOfficer() || !goal?.active;
+  ui.readingGoalStart.disabled = Boolean(goal?.active);
+  ui.readingGoalEnd.disabled = Boolean(goal?.active && !state.goalProgressLoaded);
+  if (!goal) {
+    ui.readingGoalTotal.textContent = "No active goal yet";
+    ui.readingGoalContent.innerHTML = '<p class="empty-state">The next club-wide reading challenge will appear here. Officers can start one whenever the club is ready.</p>';
+    return;
+  }
+  if (goal.active && !state.goalProgressLoaded) {
+    ui.readingGoalTotal.textContent = "Counting finished books…";
+    ui.readingGoalContent.innerHTML = '<div class="skeleton skeleton-activity" aria-hidden="true"></div>';
+    return;
+  }
+  const progress = goalProgressCount(), target = Math.max(1, Number(goal.target || 1)), percent = Math.min(100, Math.round((progress / target) * 100));
+  const start = dateTimeLabel(goal.startAt), deadline = goal.endDate ? dateLabel(goal.endDate) : "No deadline";
+  const status = goal.active ? (progress >= target ? "Goal reached — keep the streak going!" : `${target - progress} book${target - progress === 1 ? "" : "s"} to go`) : "This challenge is complete";
+  ui.readingGoalTotal.textContent = goal.active ? status : `Finished at ${progress} of ${target}`;
+  ui.readingGoalContent.innerHTML = `<div class="reading-goal-header"><div><h3>${escapeHtml(goal.title || "Our shared reading goal")}</h3><p>${goal.active ? "Every newly finished personal-shelf book adds one to this shared total." : "A finished chapter in the club’s reading history."}</p></div></div><div class="reading-goal-progress"><div class="reading-goal-progress-label"><strong>${progress} / ${target} books</strong><span>${percent}%</span></div><div class="reading-goal-track" role="progressbar" aria-label="Collective reading goal" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${Math.min(progress, target)}"><div class="reading-goal-fill" style="--goal-progress:${percent}%"></div></div></div><div class="reading-goal-stats"><div class="reading-goal-stat"><strong>${progress}</strong><span>books finished</span></div><div class="reading-goal-stat"><strong>${Math.max(0, target - progress)}</strong><span>still to go</span></div><div class="reading-goal-stat"><strong>${escapeHtml(start)}</strong><span>challenge started</span></div><div class="reading-goal-stat"><strong>${escapeHtml(deadline)}</strong><span>finish by</span></div></div>`;
+}
+function syncGoalProgressSubscription() {
+  if (!state.readingGoal?.active) {
+    state.stopGoalProgress?.(); state.stopGoalProgress = null; state.completedGoalBooks = []; state.goalProgressLoaded = true; renderReadingGoal(); return;
+  }
+  if (state.stopGoalProgress) return;
+  state.goalProgressLoaded = false; renderReadingGoal();
+  state.stopGoalProgress = onSnapshot(query(collectionGroup(db, "entries"), where("status", "==", "read"), limit(500)), (snapshot) => {
+    state.completedGoalBooks = snapshot.docs.map((entry) => ({ id: entry.id, ownerId: entry.ref.parent.parent?.id || "", ...entry.data() }));
+    state.goalProgressLoaded = true; renderReadingGoal();
+  }, (error) => {
+    console.warn("Collective reading progress unavailable:", error); state.goalProgressLoaded = false;
+    ui.readingGoalTotal.textContent = "Progress is temporarily unavailable";
+    ui.readingGoalContent.innerHTML = '<p class="empty-state">The goal is safe, but finished-book totals could not load. An officer may need to publish the Phase 3 rules or create the prompted Firestore index.</p>';
+  });
+}
+async function saveReadingGoal(event) {
+  event.preventDefault(); if (!isOfficer()) return;
+  const title = ui.readingGoalTitle.value.trim(), target = Number(ui.readingGoalTarget.value), endDate = ui.readingGoalEndDate.value;
+  if (!title || !Number.isInteger(target) || target < 1 || target > 1000) { ui.readingGoalStatus.textContent = "Add a name and choose a target from 1 to 1,000 books."; return; }
+  if (endDate && endDate < localDateKey()) { ui.readingGoalStatus.textContent = "Choose today or a future date for the new goal."; return; }
+  if (state.readingGoal?.active) { ui.readingGoalStatus.textContent = "Finish the current goal before starting another one."; return; }
+  await runBusy(ui.readingGoalStart, "Starting…", async () => {
+    try {
+      await setDoc(doc(db, "siteSettings", "readingGoal"), { title, target, metric: "books", startAt: serverTimestamp(), endDate, active: true, finalProgress: 0, updatedAt: serverTimestamp() });
+      ui.readingGoalForm.reset(); ui.readingGoalTarget.value = "50"; ui.readingGoalStatus.textContent = "The new challenge is live for everyone."; toast("Collective reading goal started.");
+    } catch (error) { console.error(error); ui.readingGoalStatus.textContent = "Could not start that goal. Check the Phase 3 Firestore rules."; }
+  });
+}
+async function finishReadingGoal() {
+  if (!isOfficer() || !state.readingGoal?.active || !window.confirm("Finish this reading goal at its current total?")) return;
+  await runBusy(ui.readingGoalEnd, "Finishing…", async () => {
+    try { await updateDoc(doc(db, "siteSettings", "readingGoal"), { active: false, finalProgress: goalProgressCount(), updatedAt: serverTimestamp() }); ui.readingGoalStatus.textContent = "Goal finished and preserved on the page."; toast("Reading goal completed."); }
+    catch (error) { console.error(error); ui.readingGoalStatus.textContent = "Could not finish the goal."; }
+  });
+}
+function syncEventRsvpSubscription() {
+  if (!isMember()) {
+    state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvpOwnerId = null; state.eventRsvps = new Map(); renderEvents(); return;
+  }
+  if (state.stopEventRsvps && state.eventRsvpOwnerId === state.user.uid) return;
+  state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvps = new Map(); state.eventRsvpOwnerId = state.user.uid;
+  state.stopEventRsvps = onSnapshot(query(collection(db, "members", state.user.uid, "eventRsvps"), limit(100)), (snapshot) => {
+    state.eventRsvps = new Map(snapshot.docs.map((entry) => [entry.id, { id: entry.id, ...entry.data() }])); renderEvents();
+  }, (error) => { console.warn("Your event responses are unavailable:", error); state.eventRsvps = new Map(); renderEvents(); });
+}
+function setAuthUi() {
+  const name = state.profile?.displayName || state.user?.displayName || "reader";
+  ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest";
+  ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.readingGoalForm.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember();
+  ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review.";
+  if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; }
+  syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); syncEventRsvpSubscription(); renderMonth(); renderReadingGoal(); renderEvents(); renderMemoryOptions(); renderMemories(); renderBoard(); renderPending(); renderBookReactions();
+}
 
 function optimizedImageUrl(url, width = 600) {
   const value = String(url || "");
@@ -423,6 +510,7 @@ async function saveCatalogShelfBook(book, status) {
   if (existing && existing.status === status) { ui.catalogMessage.textContent = `This book is already on your ${String(status).replace(/-/g, " ")} shelf.`; return false; }
   if (existing && state.catalogDuplicateConfirmation !== key) { state.catalogDuplicateConfirmation = key; ui.catalogMessage.textContent = `This book is already on your ${String(existing.status || "reading").replace(/-/g, " ")} shelf. Press the button again to move it.`; return false; }
   const metadata = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() };
+  if (status === "read") metadata.completedAt = serverTimestamp();
   if (existing) {
     await setDoc(doc(db, "memberShelves", state.user.uid, "entries", existing.id), metadata, { merge: true });
     await recordActivity(activityTypeForStatus(status), metadata, { shelfEntryId: existing.id, key: `${existing.id}_${status}` });
@@ -508,7 +596,7 @@ async function ensureProfile(user) {
   return profile;
 }
 onAuthStateChanged(auth, async (user) => {
-  if (state.user?.uid !== user?.uid) { state.stopNotifications?.(); state.stopNotifications = null; state.notifications = []; }
+  if (state.user?.uid !== user?.uid) { state.stopNotifications?.(); state.stopNotifications = null; state.notifications = []; state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvpOwnerId = null; state.eventRsvps = new Map(); }
   state.user = user; state.profile = null;
   if (!user) return setAuthUi();
   try { state.profile = await ensureProfile(user); if (!isMember()) toast("Your member record needs an officer to restore its role."); }
@@ -574,10 +662,123 @@ async function saveAnnouncement(event) {
   });
 }
 
-function renderEvents() { ui.events.innerHTML = state.events.length ? [...state.events].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((event) => `<article class="event"><time>${escapeHtml(dateLabel(event.date))}</time><div><h3>${escapeHtml(event.title)}</h3>${event.details ? `<p>${escapeHtml(event.details)}</p>` : ""}</div>${isOfficer() ? `<button class="text-button" type="button" data-remove-event="${event.id}">Remove</button>` : ""}</article>`).join("") : '<p class="empty-state">No events have been added yet.</p>'; }
-async function addEvent(event) { event.preventDefault(); if (!isOfficer()) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Adding…", async () => { try { const added = await addDoc(collection(db, "events"), { title: ui.eventTitle.value.trim(), date: ui.eventDate.value, details: ui.eventDetails.value.trim(), createdAt: new Date().toISOString() }); await publishClubNotifications("event_added", { eventId: added.id }); ui.eventForm.reset(); toast("Event added."); } catch (error) { console.error(error); toast("Could not add the event."); } }); }
-function renderMemories() { ui.memories.innerHTML = state.memories.length ? recentFirst(state.memories).map((memory) => `<article class="memory"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 800))}" alt="${escapeHtml(memory.title)}" loading="lazy" decoding="async" width="800" height="540"><div><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3></div>${isOfficer() ? `<button class="remove-button" type="button" data-remove-memory="${memory.id}" aria-label="Remove memory">×</button>` : ""}</article>`).join("") : '<p class="empty-state">The club’s first reading memory will appear here soon.</p>'; }
-async function addMemory(event) { event.preventDefault(); if (!isOfficer()) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Adding…", async () => { try { const imageUrl = ui.memoryImage.value.trim() || await uploadImage(ui.memoryFile.files?.[0]); if (!imageUrl) throw new Error("Add an image URL or choose a photo."); await addDoc(collection(db, "memories"), { imageUrl, title: ui.memoryCaption.value.trim(), category: ui.memoryCategory.value.trim(), date: new Date().toISOString() }); ui.memoryForm.reset(); toast("Memory added."); } catch (error) { console.error(error); toast(error.message || "Could not add the memory."); } }); }
+function eventDateLabel(value) {
+  const date = new Date(`${value || ""}T12:00:00`);
+  return Number.isNaN(date.valueOf()) ? "Date to be announced" : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+}
+function eventCounts(event) {
+  return {
+    going: Math.max(0, Number(event.rsvpGoing || 0)),
+    maybe: Math.max(0, Number(event.rsvpMaybe || 0)),
+    cant_attend: Math.max(0, Number(event.rsvpCantAttend || 0))
+  };
+}
+function linkedEventMemories(eventId) { return state.memories.filter((memory) => memory.eventId === eventId); }
+function eventMemoryStrip(eventId) {
+  const memories = linkedEventMemories(eventId); if (!memories.length) return "";
+  const visible = recentFirst(memories).slice(0, 5);
+  return `<div class="event-memories" aria-label="${memories.length} linked reading ${memories.length === 1 ? "memory" : "memories"}">${visible.map((memory) => `<button type="button" class="event-memory" data-memory-focus="${escapeHtml(memory.id)}" aria-label="View memory: ${escapeHtml(memory.title || "Club memory")}"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 240))}" alt="" loading="lazy" decoding="async" width="152" height="116"></button>`).join("")}${memories.length > visible.length ? `<span class="event-memory-count">+${memories.length - visible.length} more</span>` : ""}</div>`;
+}
+function eventRsvpMarkup(event, past) {
+  const counts = eventCounts(event), mine = state.eventRsvps.get(event.id)?.status || "", busy = state.rsvpBusy.has(event.id);
+  const countChips = `<div class="rsvp-counts" aria-label="Anonymous attendance totals"><span class="rsvp-count is-going">Going <strong>${counts.going}</strong></span><span class="rsvp-count is-maybe">Maybe <strong>${counts.maybe}</strong></span><span class="rsvp-count is-declined">Can’t go <strong>${counts.cant_attend}</strong></span></div>`;
+  let picker = '<p class="form-message">Invited members can RSVP after signing in.</p>';
+  if (past) picker = '<p class="form-message">RSVPs are closed for this past event.</p>';
+  else if (isMember()) picker = `<div class="rsvp-picker" aria-label="Your RSVP"><button type="button" class="rsvp-option${mine === "going" ? " is-selected" : ""}" data-rsvp-event="${escapeHtml(event.id)}" data-rsvp-status="going" data-rsvp="going" aria-pressed="${String(mine === "going")}" ${busy ? "disabled" : ""}>✓ Going</button><button type="button" class="rsvp-option${mine === "maybe" ? " is-selected" : ""}" data-rsvp-event="${escapeHtml(event.id)}" data-rsvp-status="maybe" data-rsvp="maybe" aria-pressed="${String(mine === "maybe")}" ${busy ? "disabled" : ""}>? Maybe</button><button type="button" class="rsvp-option${mine === "cant_attend" ? " is-selected" : ""}" data-rsvp-event="${escapeHtml(event.id)}" data-rsvp-status="cant_attend" data-rsvp="declined" aria-pressed="${String(mine === "cant_attend")}" ${busy ? "disabled" : ""}>× Can’t go</button></div>`;
+  return `<div class="event-rsvp"><div class="event-rsvp-header"><span class="event-rsvp-title">Attendance</span>${countChips}</div>${picker}</div>`;
+}
+function eventCard(event, past) {
+  const memories = linkedEventMemories(event.id), counts = eventCounts(event), responseTotal = counts.going + counts.maybe + counts.cant_attend;
+  const historyLocked = memories.length > 0 || responseTotal > 0;
+  const officerAction = isOfficer() ? (historyLocked ? '<span class="form-message">Kept in club history</span>' : `<button class="text-button" type="button" data-remove-event="${escapeHtml(event.id)}">Remove event</button>`) : "";
+  return `<article id="event-${escapeHtml(event.id)}" class="event"><time datetime="${escapeHtml(event.date || "")}">${escapeHtml(eventDateLabel(event.date))}</time><div><h3>${escapeHtml(event.title)}</h3>${event.details ? `<p>${escapeHtml(event.details)}</p>` : ""}</div>${eventRsvpMarkup(event, past)}${eventMemoryStrip(event.id)}${officerAction}</article>`;
+}
+function renderEvents() {
+  if (!state.events.length) { ui.events.innerHTML = '<p class="empty-state">No events have been added yet.</p>'; return; }
+  const today = localDateKey(), upcoming = [...state.events].filter((event) => String(event.date || "") >= today).sort((a, b) => String(a.date).localeCompare(String(b.date))), past = [...state.events].filter((event) => String(event.date || "") < today).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const group = (title, items, isPast) => `<section class="event-group${isPast ? " is-past" : ""}"><header class="event-group-header"><h3 class="event-group-title">${title}</h3><span class="event-group-count">${items.length} ${items.length === 1 ? "event" : "events"}</span></header><div class="event-group-list">${items.length ? items.map((event) => eventCard(event, isPast)).join("") : `<p class="empty-state">${isPast ? "Past club days will collect here." : "Nothing is scheduled yet."}</p>`}</div></section>`;
+  ui.events.innerHTML = `<div class="event-groups">${group("Coming up", upcoming, false)}${group("From the club archive", past, true)}</div>`;
+}
+async function saveEventRsvp(eventId, status) {
+  if (!isMember() || !["going", "maybe", "cant_attend"].includes(status) || state.rsvpBusy.has(eventId)) return;
+  const event = state.events.find((item) => item.id === eventId); if (!event || String(event.date || "") < localDateKey()) return;
+  const previousRsvp = state.eventRsvps.get(eventId), previousCounts = eventCounts(event);
+  if (previousRsvp?.status === status) { toast("That is already your RSVP for this event."); return; }
+  const optimisticCounts = { ...previousCounts };
+  if (previousRsvp?.status) optimisticCounts[previousRsvp.status] = Math.max(0, optimisticCounts[previousRsvp.status] - 1);
+  optimisticCounts[status] += 1;
+  state.eventRsvps.set(eventId, { memberId: state.user.uid, eventId, status, updatedAt: new Date() });
+  event.rsvpGoing = optimisticCounts.going; event.rsvpMaybe = optimisticCounts.maybe; event.rsvpCantAttend = optimisticCounts.cant_attend; state.rsvpBusy.add(eventId); renderEvents();
+  try {
+    await runTransaction(db, async (transaction) => {
+      const eventRef = doc(db, "events", eventId), responseRef = doc(db, "members", state.user.uid, "eventRsvps", eventId);
+      const [eventSnapshot, responseSnapshot] = await Promise.all([transaction.get(eventRef), transaction.get(responseRef)]);
+      if (!eventSnapshot.exists()) throw new Error("This event is no longer available.");
+      const savedEvent = eventSnapshot.data(), savedPrevious = responseSnapshot.data()?.status || "", next = eventCounts(savedEvent);
+      if (savedPrevious === status) return;
+      if (savedPrevious) {
+        if (next[savedPrevious] < 1) throw new Error("The attendance total needs an officer to repair it before this RSVP can change.");
+        next[savedPrevious] -= 1;
+      }
+      next[status] += 1;
+      transaction.update(eventRef, { rsvpGoing: next.going, rsvpMaybe: next.maybe, rsvpCantAttend: next.cant_attend });
+      transaction.set(responseRef, { memberId: state.user.uid, eventId, status, updatedAt: serverTimestamp() });
+    });
+    toast(status === "going" ? "See you there — RSVP saved!" : status === "maybe" ? "Maybe noted. You can update it anytime before the event." : "Thanks for letting the club know.");
+  } catch (error) {
+    console.error(error); if (previousRsvp) state.eventRsvps.set(eventId, previousRsvp); else state.eventRsvps.delete(eventId);
+    event.rsvpGoing = previousCounts.going; event.rsvpMaybe = previousCounts.maybe; event.rsvpCantAttend = previousCounts.cant_attend; toast(error.message || "Could not save that RSVP.");
+  } finally { state.rsvpBusy.delete(eventId); renderEvents(); }
+}
+async function addEvent(event) {
+  event.preventDefault(); if (!isOfficer()) return;
+  const button = event.currentTarget.querySelector("button[type=submit]");
+  await runBusy(button, "Adding…", async () => {
+    try { const added = await addDoc(collection(db, "events"), { title: ui.eventTitle.value.trim(), date: ui.eventDate.value, details: ui.eventDetails.value.trim(), createdAt: new Date().toISOString(), rsvpGoing: 0, rsvpMaybe: 0, rsvpCantAttend: 0 }); await publishClubNotifications("event_added", { eventId: added.id }); ui.eventForm.reset(); toast("Event added."); }
+    catch (error) { console.error(error); toast("Could not add the event."); }
+  });
+}
+function renderMemoryOptions() {
+  if (!ui.memoryEvent || !ui.memoryBook) return;
+  const selectedEvent = ui.memoryEvent.value || state.memories.find((memory) => memory.id === state.memoryEditingId)?.eventId || "";
+  const selectedBook = ui.memoryBook.value || state.memories.find((memory) => memory.id === state.memoryEditingId)?.bookId || "";
+  const events = [...state.events].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  ui.memoryEvent.innerHTML = '<option value="">No event selected</option>' + events.map((event) => `<option value="${escapeHtml(event.id)}">${escapeHtml(eventDateLabel(event.date))} — ${escapeHtml(event.title)}</option>`).join("");
+  ui.memoryBook.innerHTML = '<option value="">No book selected</option>' + [...state.books].sort((a, b) => String(a.title).localeCompare(String(b.title))).map((book) => `<option value="${escapeHtml(book.id)}">${escapeHtml(book.title)} — ${escapeHtml(book.author || "Unknown author")}</option>`).join("");
+  if (selectedEvent && !events.some((event) => event.id === selectedEvent)) ui.memoryEvent.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(selectedEvent)}">Unavailable event — keep saved link</option>`);
+  if (selectedBook && !state.books.some((book) => book.id === selectedBook)) ui.memoryBook.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(selectedBook)}">Unavailable book — keep saved link</option>`);
+  ui.memoryEvent.value = selectedEvent; ui.memoryBook.value = selectedBook;
+}
+function memoryAssociationMarkup(memory) {
+  const event = state.events.find((item) => item.id === memory.eventId), book = state.books.find((item) => item.id === memory.bookId);
+  const eventTitle = memory.eventId ? (event?.title || memory.eventTitleSnapshot || "") : "", bookTitle = memory.bookId ? (book?.title || memory.bookTitleSnapshot || "") : "";
+  return `${eventTitle ? `<button type="button" class="memory-link" data-event-jump="${escapeHtml(memory.eventId || "")}">Event: ${escapeHtml(eventTitle)}</button>` : ""}${bookTitle ? (book ? `<button type="button" class="memory-link" data-book-id="${escapeHtml(book.id)}">Book: ${escapeHtml(bookTitle)}</button>` : `<span class="memory-association">Book: ${escapeHtml(bookTitle)}</span>`) : ""}`;
+}
+function renderMemories() {
+  ui.memories.innerHTML = state.memories.length ? recentFirst(state.memories).map((memory) => `<article id="memory-${escapeHtml(memory.id)}" class="memory"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 800))}" alt="${escapeHtml(memory.title)}" loading="lazy" decoding="async" width="800" height="540"><div><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3>${memoryAssociationMarkup(memory)}</div>${isOfficer() ? `<div class="memory-link-controls"><button type="button" data-edit-memory="${escapeHtml(memory.id)}">Edit</button></div><button class="remove-button" type="button" data-remove-memory="${escapeHtml(memory.id)}" aria-label="Remove memory">×</button>` : ""}</article>`).join("") : '<p class="empty-state">The club’s first reading memory will appear here soon.</p>';
+  renderEvents();
+}
+function resetMemoryEditor() {
+  state.memoryEditingId = null; ui.memoryEditId.value = ""; ui.memoryForm.reset(); ui.memorySave.textContent = "Add memory"; ui.memoryCancelEdit.hidden = true; ui.memoryStatus.textContent = ""; renderMemoryOptions();
+}
+function editMemory(memoryId) {
+  if (!isOfficer()) return; const memory = state.memories.find((item) => item.id === memoryId); if (!memory) return;
+  state.memoryEditingId = memoryId; ui.memoryEditId.value = memoryId; ui.memoryImage.value = memory.imageUrl || ""; ui.memoryCaption.value = memory.title || ""; ui.memoryCategory.value = memory.category || ""; renderMemoryOptions(); ui.memoryEvent.value = memory.eventId || ""; ui.memoryBook.value = memory.bookId || ""; ui.memorySave.textContent = "Save changes"; ui.memoryCancelEdit.hidden = false; ui.memoryStatus.textContent = "Editing this memory. Leave the image fields unchanged to keep its current photo."; ui.memoryForm.scrollIntoView({ behavior: "smooth", block: "center" }); ui.memoryCaption.focus();
+}
+async function addMemory(event) {
+  event.preventDefault(); if (!isOfficer()) return;
+  await runBusy(ui.memorySave, state.memoryEditingId ? "Saving…" : "Adding…", async () => {
+    try {
+      const existing = state.memories.find((memory) => memory.id === state.memoryEditingId), file = ui.memoryFile.files?.[0];
+      const imageUrl = file ? await uploadImage(file) : (ui.memoryImage.value.trim() || existing?.imageUrl || "");
+      if (!imageUrl) throw new Error("Add an image URL or choose a photo.");
+      const linkedEvent = state.events.find((item) => item.id === ui.memoryEvent.value), linkedBook = state.books.find((item) => item.id === ui.memoryBook.value);
+      const payload = { imageUrl, title: ui.memoryCaption.value.trim(), category: ui.memoryCategory.value.trim(), date: existing?.date || new Date().toISOString(), eventId: ui.memoryEvent.value, bookId: ui.memoryBook.value, eventTitleSnapshot: linkedEvent?.title || (ui.memoryEvent.value ? existing?.eventTitleSnapshot || "" : ""), eventDateSnapshot: linkedEvent?.date || (ui.memoryEvent.value ? existing?.eventDateSnapshot || "" : ""), bookTitleSnapshot: linkedBook?.title || (ui.memoryBook.value ? existing?.bookTitleSnapshot || "" : ""), bookAuthorSnapshot: linkedBook?.author || (ui.memoryBook.value ? existing?.bookAuthorSnapshot || "" : ""), updatedAt: serverTimestamp() };
+      if (existing) await setDoc(doc(db, "memories", existing.id), payload, { merge: true }); else await addDoc(collection(db, "memories"), payload);
+      const changed = Boolean(existing); resetMemoryEditor(); toast(changed ? "Reading memory updated." : "Reading memory added.");
+    } catch (error) { console.error(error); ui.memoryStatus.textContent = error.message || "Could not save the memory."; }
+  });
+}
 async function addInvite(event) { event.preventDefault(); if (!isOfficer()) return; const email = ui.inviteEmail.value.trim().toLowerCase(); if (!email) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Approving…", async () => { try { await setDoc(doc(db, "allowedEmails", email), { email, invitedAt: new Date().toISOString() }); ui.inviteForm.reset(); toast("That email can now create a member library."); } catch (error) { console.error(error); toast("Could not approve that email."); } }); }
 
 function renderBoard() {
@@ -901,14 +1102,16 @@ async function updateShelfStatus(event, entryId) {
   const button = event.currentTarget.querySelector("button[type=submit]");
   await runBusy(button, "Updating…", async () => {
     try {
-      await setDoc(doc(db, "memberShelves", state.openProfileId, "entries", entryId), {
+      const updates = {
         title: entry.title || "Untitled book",
         author: entry.author || "Unknown author",
         coverUrl: entry.coverUrl || "",
         status,
         note: entry.note || "",
         date: entry.date || new Date().toISOString()
-      }, { merge: true });
+      };
+      if (status === "read") updates.completedAt = serverTimestamp();
+      await setDoc(doc(db, "memberShelves", state.openProfileId, "entries", entryId), updates, { merge: true });
       await recordActivity(activityTypeForStatus(status), { ...entry, status }, { shelfEntryId: entryId, key: `${entryId}_${status}` });
       $("bookDetailMessage").textContent = "Reading status updated for everyone who views your shelf.";
       toast("Reading status updated.");
@@ -963,6 +1166,7 @@ async function addShelfBook(event) {
         note: $("shelfNote").value.trim(),
         date: new Date().toISOString()
       };
+      if (status === "read") shelfBook.completedAt = serverTimestamp();
       const added = await addDoc(collection(db, "memberShelves", state.openProfileId, "entries"), shelfBook);
       await recordActivity(activityTypeForStatus(status), shelfBook, { shelfEntryId: added.id, key: `${added.id}_${status}` });
       event.currentTarget.reset();
@@ -974,11 +1178,12 @@ async function addShelfBook(event) {
   });
 }
 
-onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); renderNotifications(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
+onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); renderNotifications(); renderMemoryOptions(); renderMemories(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
 onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); renderNotifications(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
 onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.activityLoaded = true; renderActivityFeed(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { const pick = snapshot.data() || {}; state.currentPickId = pick.bookId || null; state.monthAccent = /^#[0-9a-f]{6}$/i.test(pick.highlightColor || "") ? pick.highlightColor : "#d8e66f"; if ($("monthAccent")) $("monthAccent").value = state.monthAccent; renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { toast("Book of the Month could not load."); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement yet—check back after the next library meeting."; if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
+onSnapshot(doc(db, "siteSettings", "readingGoal"), (snapshot) => { state.readingGoal = snapshot.exists() ? snapshot.data() : null; syncGoalProgressSubscription(); renderReadingGoal(); }, (error) => { console.warn("Reading goal unavailable:", error); ui.readingGoalTotal.textContent = "Reading goal unavailable"; ui.readingGoalContent.innerHTML = '<p class="empty-state">The shared goal could not load. The rest of the site is still available.</p>'; });
 onSnapshot(doc(db, "siteSettings", "catalog"), (snapshot) => {
   const settings = snapshot.data() || {};
   state.googleBooksKey = String(settings.googleBooksApiKey || "").trim();
@@ -990,7 +1195,7 @@ onSnapshot(doc(db, "siteSettings", "catalog"), (snapshot) => {
     ui.uploadPreset.value = state.uploadPreset;
   }
 }, (error) => console.warn("Catalogue settings unavailable:", error));
-onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderEvents(); renderNotifications(); }, () => { ui.events.innerHTML = '<p class="empty-state">Events are unavailable right now.</p>'; });
+onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMemoryOptions(); renderMemories(); renderNotifications(); }, () => { ui.events.innerHTML = '<p class="empty-state">Events are unavailable right now.</p>'; });
 onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMemories(); }, () => { ui.memories.innerHTML = '<p class="empty-state">Reading memories are unavailable right now.</p>'; });
 onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
 
@@ -999,7 +1204,7 @@ ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.st
 ui.bookDialog.addEventListener("close", stopBookSocialSubscriptions);
 ui.notificationButton.addEventListener("click", () => { renderNotifications(); showDialog(ui.notificationDialog); });
 ui.markNotificationsRead.addEventListener("click", markAllNotificationsRead);
-$("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(localStorage.getItem("becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+$("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.readingGoalForm.addEventListener("submit", saveReadingGoal); ui.readingGoalEnd.addEventListener("click", finishReadingGoal); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.memoryCancelEdit.addEventListener("click", resetMemoryEditor); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(localStorage.getItem("becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 ui.search.addEventListener("input", (event) => { state.search = event.target.value; sessionStorage.setItem("becShelfSearch", state.search); renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; sessionStorage.setItem("becShelfGenre", state.genre); renderBooks(); });
 ui.shelfPrevious.addEventListener("click", () => moveShelf(-1)); ui.shelfNext.addEventListener("click", () => moveShelf(1)); ui.shelfExpand.addEventListener("click", toggleShelfLayout); ui.books.addEventListener("scroll", updateShelfNavigation, { passive: true }); window.addEventListener("resize", updateShelfNavigation);
 ui.surprise.addEventListener("click", pickRandomBook);
@@ -1019,6 +1224,14 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-cancel-reply]")) clearReplyTarget();
   const reaction = event.target.closest("[data-book-reaction]");
   if (reaction) await toggleBookReaction(reaction.dataset.bookReaction);
+  const rsvp = event.target.closest("[data-rsvp-event][data-rsvp-status]");
+  if (rsvp) await saveEventRsvp(rsvp.dataset.rsvpEvent, rsvp.dataset.rsvpStatus);
+  const memoryEdit = event.target.closest("[data-edit-memory]");
+  if (memoryEdit) editMemory(memoryEdit.dataset.editMemory);
+  const memoryFocus = event.target.closest("[data-memory-focus]");
+  if (memoryFocus) { const target = $(`memory-${memoryFocus.dataset.memoryFocus}`); target?.scrollIntoView({ behavior: "smooth", block: "center" }); target?.animate?.([{ outlineColor: "transparent" }, { outlineColor: "var(--orange)" }, { outlineColor: "transparent" }], { duration: 1300 }); }
+  const eventJump = event.target.closest("[data-event-jump]");
+  if (eventJump?.dataset.eventJump) $(`event-${eventJump.dataset.eventJump}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   const catalogResult = event.target.closest("[data-catalog-result]");
   if (catalogResult) await selectCatalogBook(Number(catalogResult.dataset.catalogResult));
   const monthDescriptionToggle = event.target.closest("[data-toggle-month-description]");
@@ -1035,12 +1248,14 @@ document.addEventListener("click", async (event) => {
   if (rejectPending && !rejectPending.disabled) { rejectPending.disabled = true; await reviewPending(rejectPending.dataset.rejectPending, false); if (rejectPending.isConnected) rejectPending.disabled = false; }
   const removeEvent = event.target.closest("[data-remove-event]");
   if (removeEvent && isOfficer() && window.confirm("Remove this event from the public calendar?")) {
+    const savedEvent = state.events.find((item) => item.id === removeEvent.dataset.removeEvent), counts = eventCounts(savedEvent || {}), linked = linkedEventMemories(removeEvent.dataset.removeEvent).length;
+    if (linked || counts.going + counts.maybe + counts.cant_attend) { toast("This event has memories or RSVPs, so it is being kept in the club archive."); return; }
     try { await deleteDoc(doc(db, "events", removeEvent.dataset.removeEvent)); toast("Event removed."); }
     catch (error) { console.error(error); toast("Could not remove that event."); }
   }
   const removeMemory = event.target.closest("[data-remove-memory]");
   if (removeMemory && isOfficer() && window.confirm("Remove this photo from Reading Memories?")) {
-    try { await deleteDoc(doc(db, "memories", removeMemory.dataset.removeMemory)); toast("Memory removed."); }
+    try { await deleteDoc(doc(db, "memories", removeMemory.dataset.removeMemory)); if (state.memoryEditingId === removeMemory.dataset.removeMemory) resetMemoryEditor(); toast("Memory removed."); }
     catch (error) { console.error(error); toast("Could not remove that memory."); }
   }
   const removePin = event.target.closest("[data-remove-pin]");
