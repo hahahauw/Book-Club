@@ -26,6 +26,11 @@ function secureUrl(value) {
   return String(value || "").replace(/^http:/, "https:");
 }
 
+function pageCount(value) {
+  const pages = Math.round(Number(value || 0));
+  return Number.isFinite(pages) && pages > 0 && pages <= 10000 ? pages : 0;
+}
+
 async function fetchJson(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -70,6 +75,7 @@ function normalizeOpenLibrary(item) {
     title: text(item.title) || "Untitled book",
     author: text(item.author_name) || "Unknown author",
     publicationYear: item.first_publish_year || "",
+    pageCount: pageCount(item.number_of_pages_median),
     isbn: bookIsbn,
     coverUrl: openLibraryCover(item.cover_i, bookIsbn),
     synopsis: text(item.first_sentence),
@@ -92,6 +98,7 @@ function normalizeGoogleBooks(item) {
     title: text(info.title) || "Untitled book",
     author: text(info.authors) || "Unknown author",
     publicationYear: String(info.publishedDate || "").slice(0, 4),
+    pageCount: pageCount(info.pageCount),
     isbn: bookIsbn,
     coverUrl: secureUrl(info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail),
     synopsis: text(info.description),
@@ -102,7 +109,7 @@ function normalizeGoogleBooks(item) {
 }
 
 function quality(book) {
-  return (book.coverUrl ? 2 : 0) + (book.synopsis ? Math.min(book.synopsis.length / 200, 3) : 0) + (book.genre ? 1 : 0) + (book.isbn ? 1 : 0);
+  return (book.coverUrl ? 2 : 0) + (book.synopsis ? Math.min(book.synopsis.length / 200, 3) : 0) + (book.genre ? 1 : 0) + (book.isbn ? 1 : 0) + (pageCount(book.pageCount) ? .5 : 0);
 }
 
 function mergeBook(first, second) {
@@ -113,6 +120,7 @@ function mergeBook(first, second) {
     ...preferred,
     publicationYear: preferred.publicationYear || alternate.publicationYear,
     isbn: preferred.isbn || alternate.isbn,
+    pageCount: pageCount(preferred.pageCount) || pageCount(alternate.pageCount),
     coverUrl: preferred.coverUrl || alternate.coverUrl,
     synopsis: String(preferred.synopsis || "").length >= String(alternate.synopsis || "").length ? preferred.synopsis : alternate.synopsis,
     genre: preferred.genre || alternate.genre,
@@ -134,7 +142,7 @@ function mergeResults(results) {
 
 async function searchOpenLibrary(term) {
   const compact = term.replace(/[\s-]/g, "");
-  const params = new URLSearchParams({ q: /^97[89]\d{10}$|^\d{9}[\dXx]$/.test(compact) ? `isbn:${compact}` : term, fields: "key,title,author_name,first_publish_year,isbn,cover_i,first_sentence,subject", limit: "10" });
+  const params = new URLSearchParams({ q: /^97[89]\d{10}$|^\d{9}[\dXx]$/.test(compact) ? `isbn:${compact}` : term, fields: "key,title,author_name,first_publish_year,isbn,cover_i,first_sentence,subject,number_of_pages_median", limit: "10" });
   const data = await fetchJson(`${OPEN_LIBRARY_SEARCH_URL}?${params}`);
   return (data.docs || []).map(normalizeOpenLibrary).filter((book) => book.openLibraryKey && book.title);
 }
@@ -163,7 +171,7 @@ export async function loadCatalogDetails(book) {
     const work = await fetchJson(`https://openlibrary.org${book.openLibraryKey}.json`);
     const synopsis = text(work.description);
     const genre = Array.isArray(work.subjects) ? work.subjects.slice(0, 2).join(", ") : "";
-    return { ...book, synopsis: synopsis.length > String(book.synopsis || "").length ? synopsis : book.synopsis, genre: book.genre || genre };
+    return { ...book, synopsis: synopsis.length > String(book.synopsis || "").length ? synopsis : book.synopsis, genre: book.genre || genre, pageCount: pageCount(book.pageCount) || pageCount(work.number_of_pages) };
   } catch {
     return book;
   }

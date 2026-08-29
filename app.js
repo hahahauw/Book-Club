@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=2";
+import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=3";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA-G9WsH-sMdTzXvylNSJ1b-l5XkjBEol4",
@@ -20,6 +20,8 @@ const ui = {
   books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), shelfNavigation: $("shelfNavigation"), shelfPrevious: $("shelfPreviousButton"), shelfExpand: $("shelfExpandButton"), shelfNext: $("shelfNextButton"), surprise: $("surpriseBookButton"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
   activityFeed: $("activityFeed"), activityStatus: $("activityStatus"),
   readingGoalContent: $("readingGoalContent"), readingGoalTotal: $("readingGoalTotal"), readingGoalForm: $("readingGoalForm"), readingGoalTitle: $("readingGoalTitle"), readingGoalTarget: $("readingGoalTarget"), readingGoalEndDate: $("readingGoalEndDate"), readingGoalStart: $("readingGoalStartButton"), readingGoalEnd: $("readingGoalEndButton"), readingGoalStatus: $("readingGoalStatus"),
+  dashboard: $("personalDashboard"), dashboardGreeting: $("dashboardGreeting"), dashboardOpenLibrary: $("dashboardOpenLibrary"), dashboardStats: $("dashboardStats"), dashboardMonth: $("dashboardMonth"), dashboardYear: $("dashboardYear"), dashboardReading: $("dashboardReading"), dashboardWanted: $("dashboardWanted"), dashboardFinished: $("dashboardFinished"), dashboardStatus: $("dashboardStatus"),
+  discovery: $("discoveryCollections"), discoveryStatus: $("discoveryStatus"),
   events: $("eventsList"), eventForm: $("eventForm"), eventTitle: $("eventTitle"), eventDate: $("eventDate"), eventDetails: $("eventDetails"),
   boardForm: $("boardForm"), boardText: $("boardText"), boardStatus: $("boardStatus"), boardGuestHint: $("boardGuestHint"), pinBoard: $("pinBoard"),
   memories: $("memoriesGrid"), memoryForm: $("memoryForm"), memoryImage: $("memoryImage"), memoryFile: $("memoryFile"), memoryCaption: $("memoryCaption"), memoryCategory: $("memoryCategory"), memoryEvent: $("memoryEvent"), memoryBook: $("memoryBook"), memoryEditId: $("memoryEditId"), memorySave: $("memorySaveButton"), memoryCancelEdit: $("memoryCancelEdit"), memoryStatus: $("memoryStatus"), inviteForm: $("inviteForm"), inviteEmail: $("inviteEmail"),
@@ -27,7 +29,7 @@ const ui = {
   members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
 };
 
-const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", readingGoal: null, completedGoalBooks: [], goalProgressLoaded: false, stopGoalProgress: null, events: [], eventRsvps: new Map(), stopEventRsvps: null, eventRsvpOwnerId: null, rsvpBusy: new Set(), memories: [], memoryEditingId: null, boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
+const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, dashboardShelfEntries: [], dashboardRatings: [], dashboardLoaded: false, dashboardRatingsLoaded: false, dashboardRatingsUnavailable: false, stopDashboardShelf: null, stopDashboardRatings: null, dashboardOwnerId: null, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", readingGoal: null, completedGoalBooks: [], goalProgressLoaded: false, stopGoalProgress: null, events: [], eventRsvps: new Map(), stopEventRsvps: null, eventRsvpOwnerId: null, rsvpBusy: new Set(), memories: [], memoryEditingId: null, boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
 const REACTION_OPTIONS = [
   ["emotional", "😭", "Emotional"], ["slow_burn", "🐌", "Slow Burn"], ["mind_blown", "🤯", "Mind-blowing"], ["comfort_read", "🧸", "Comfort Read"], ["funny", "😂", "Funny"], ["devastating", "💀", "Devastating"], ["thought_provoking", "🧠", "Thought-provoking"], ["great_romance", "❤️", "Great Romance"], ["great_worldbuilding", "🌎", "Great Worldbuilding"], ["beautiful_writing", "✍️", "Beautiful Writing"]
 ];
@@ -100,6 +102,116 @@ function renderMemberActivity() {
   const target = $("memberActivityList"); if (!target) return;
   target.removeAttribute("aria-busy");
   target.innerHTML = state.profileActivities.length ? `<ol class="activity-list profile-activity-list">${activityRows(state.profileActivities, true)}</ol>` : '<p class="empty-state">No public reading activity yet.</p>';
+}
+function pageCountValue(value) {
+  const pages = Math.round(Number(value || 0));
+  return Number.isFinite(pages) && pages > 0 && pages <= 10000 ? pages : 0;
+}
+function withPageCount(data, value) {
+  const pages = pageCountValue(value);
+  if (pages) data.pageCount = pages;
+  return data;
+}
+function genreParts(entry) {
+  return String(entry?.genre || "").split(/[,;/]/).map((genre) => genre.trim()).filter(Boolean).slice(0, 3);
+}
+function topGenre(entries) {
+  const counts = new Map();
+  entries.forEach((entry) => genreParts(entry).forEach((genre) => counts.set(genre, (counts.get(genre) || 0) + 1)));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || "Still exploring";
+}
+function periodReadingStats(entries, ratings, start, end) {
+  const completed = entries.filter((entry) => entry.status === "read" && timeValue(entry.completedAt) >= start.valueOf() && timeValue(entry.completedAt) < end.valueOf());
+  const withPages = completed.filter((entry) => pageCountValue(entry.pageCount));
+  const pages = withPages.reduce((sum, entry) => sum + pageCountValue(entry.pageCount), 0);
+  const periodRatings = ratings.filter((rating) => timeValue(rating.updatedAt) >= start.valueOf() && timeValue(rating.updatedAt) < end.valueOf());
+  const highest = [...periodRatings].sort((a, b) => Number(b.stars || 0) - Number(a.stars || 0) || timeValue(b.updatedAt) - timeValue(a.updatedAt))[0];
+  return { completed, pages, pageBooks: withPages.length, genre: topGenre(completed), ratings: periodRatings, highest, highestBook: highest ? state.books.find((book) => book.id === highest.bookId) : null };
+}
+function dashboardSummaryMarkup(title, stats, emptyCopy) {
+  if (!stats.completed.length && !stats.ratings.length) return `<p class="eyebrow">${escapeHtml(title.toUpperCase())}</p><h3>${escapeHtml(title)}</h3><p class="dashboard-summary-empty">${escapeHtml(emptyCopy)}</p>`;
+  const pageLine = stats.pageBooks ? `<li><strong>${stats.pages.toLocaleString()}</strong><span>${stats.pageBooks === stats.completed.length ? "pages finished" : `known pages from ${stats.pageBooks} of ${stats.completed.length} finishes`}</span></li>` : "";
+  const ratingLine = stats.highest && stats.highestBook ? `<li><strong>${"★".repeat(Number(stats.highest.stars || 0))}</strong><span>highest rated: ${escapeHtml(stats.highestBook.title)}</span></li>` : "";
+  const genreLine = stats.completed.some((entry) => genreParts(entry).length) ? `<li><strong>${escapeHtml(stats.genre)}</strong><span>most-read genre</span></li>` : "";
+  return `<p class="eyebrow">YOUR ${escapeHtml(title.toUpperCase())}</p><h3>${escapeHtml(title)}</h3><ul><li><strong>${stats.completed.length}</strong><span>${stats.completed.length === 1 ? "book" : "books"} finished</span></li>${pageLine}${ratingLine}${genreLine}</ul>`;
+}
+function dashboardBookMarkup(book) {
+  return `<article class="dashboard-book"><button type="button" data-dashboard-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title || "Untitled book")}"><span class="dashboard-book-cover">${coverMarkup(book, "", "lazy", 360)}</span><span class="dashboard-book-copy"><strong>${escapeHtml(book.title || "Untitled book")}</strong><small>${escapeHtml(book.author || "Unknown author")}</small>${pageCountValue(book.pageCount) ? `<em>${pageCountValue(book.pageCount).toLocaleString()} pages</em>` : ""}</span></button></article>`;
+}
+function renderDashboardBookRow(target, entries, emptyCopy) {
+  target.removeAttribute("aria-busy");
+  target.innerHTML = entries.length ? entries.slice(0, 4).map(dashboardBookMarkup).join("") : `<p class="empty-state dashboard-empty">${escapeHtml(emptyCopy)} <button type="button" class="text-button" data-open-dashboard-library>Open my library</button></p>`;
+}
+function renderDashboard() {
+  if (!isMember()) { ui.dashboard.hidden = true; return; }
+  ui.dashboard.hidden = false;
+  const displayName = state.profile?.displayName || "reader";
+  ui.dashboardGreeting.textContent = `A private-at-a-glance view for ${displayName}, built from your personal shelf and club ratings.`;
+  if (!state.dashboardLoaded) return;
+  const entries = state.dashboardShelfEntries, reading = recentFirst(entries.filter((entry) => entry.status === "reading")), wanted = recentFirst(entries.filter((entry) => entry.status === "want-to-read")), finished = [...entries.filter((entry) => entry.status === "read")].sort((a, b) => timeValue(b.completedAt) - timeValue(a.completedAt) || String(b.date || "").localeCompare(String(a.date || "")));
+  const readPages = finished.reduce((sum, entry) => sum + pageCountValue(entry.pageCount), 0), pageBooks = finished.filter((entry) => pageCountValue(entry.pageCount)).length;
+  const currentRating = state.dashboardRatings[0];
+  const stats = [
+    [finished.length, "books finished"], [reading.length, "currently reading"], [wanted.length, "waiting up next"], [topGenre(entries), "most-shelved genre"]
+  ];
+  if (pageBooks) stats.push([readPages.toLocaleString(), pageBooks === finished.length ? "pages across finished books" : `known pages across ${pageBooks} finished books`]);
+  if (currentRating) stats.push([`${Number(currentRating.stars).toFixed(1)} ★`, "your current club-pick rating"]);
+  ui.dashboardStats.removeAttribute("aria-busy");
+  ui.dashboardStats.innerHTML = stats.map(([value, label]) => `<article class="dashboard-stat"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></article>`).join("");
+  const now = new Date(), monthStart = new Date(now.getFullYear(), now.getMonth(), 1), monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1), yearStart = new Date(now.getFullYear(), 0, 1), yearEnd = new Date(now.getFullYear() + 1, 0, 1);
+  const monthTitle = now.toLocaleDateString(undefined, { month: "long" }), yearTitle = String(now.getFullYear());
+  ui.dashboardMonth.innerHTML = dashboardSummaryMarkup(monthTitle, periodReadingStats(entries, state.dashboardRatings, monthStart, monthEnd), "No newly tracked finishes or ratings yet this month. Your next ending will start the summary.");
+  ui.dashboardYear.innerHTML = dashboardSummaryMarkup(`${yearTitle} so far`, periodReadingStats(entries, state.dashboardRatings, yearStart, yearEnd), "No completion dates have been recorded this year yet. Older Read books still remain in your all-time total.");
+  renderDashboardBookRow(ui.dashboardReading, reading, "Nothing is marked Currently Reading yet.");
+  renderDashboardBookRow(ui.dashboardWanted, wanted, "Your Want to Read section is waiting for a future favorite.");
+  renderDashboardBookRow(ui.dashboardFinished, finished, "Finished books will collect here once you move them into Read.");
+  ui.dashboardStatus.textContent = pageBooks && pageBooks < finished.length ? `Page totals use verified catalogue data from ${pageBooks} of ${finished.length} finished books; missing page counts are not estimated.` : finished.length && !pageBooks ? "Page totals will appear when finished books include reliable catalogue page counts. Nothing is estimated." : "Completion dates are tracked from Phase 3 onward; older Read books remain in the all-time total without being assigned a false finish date.";
+}
+function syncDashboardSubscriptions() {
+  if (!isMember()) {
+    state.stopDashboardShelf?.(); state.stopDashboardRatings?.(); state.stopDashboardShelf = null; state.stopDashboardRatings = null; state.dashboardOwnerId = null; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false; renderDashboard(); return;
+  }
+  if (state.dashboardOwnerId === state.user.uid && state.stopDashboardShelf) return;
+  state.stopDashboardShelf?.(); state.stopDashboardRatings?.(); state.dashboardOwnerId = state.user.uid; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false; renderDashboard();
+  state.stopDashboardShelf = onSnapshot(query(collection(db, "memberShelves", state.user.uid, "entries"), limit(300)), (snapshot) => {
+    state.dashboardShelfEntries = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.dashboardLoaded = true;
+    if (state.openProfileId === state.user.uid) state.shelfEntries = state.dashboardShelfEntries; renderDashboard();
+  }, (error) => { console.warn("Personal dashboard shelf unavailable:", error); state.dashboardLoaded = true; ui.dashboardStats.removeAttribute("aria-busy"); ui.dashboardStats.innerHTML = '<p class="empty-state">Your dashboard could not load, but My library is still available.</p>'; ui.dashboardStatus.textContent = "Check the published Firestore rules and try reopening the page."; });
+  state.dashboardRatings = state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: state.currentPickId || "" })); state.dashboardRatingsLoaded = true;
+}
+function openDashboardBook(entryId) {
+  if (!isMember()) return; const entry = state.dashboardShelfEntries.find((book) => book.id === entryId); if (!entry) return;
+  state.openProfileId = state.user.uid; state.openProfileMember = { id: state.user.uid, ...state.profile }; state.shelfEntries = state.dashboardShelfEntries; state.randomPickerActive = false; openBookDetails(entry, true);
+}
+function activityBook(activity) {
+  return state.books.find((book) => book.id === activity.publicBookId) || state.books.find((book) => sameBook(book, { title: activity.bookTitle, author: activity.bookAuthor }));
+}
+function discoveryBookCard(book, note) {
+  return `<article class="discovery-book"><button type="button" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title || "Untitled book")}"><span class="discovery-cover">${coverMarkup(book, "", "lazy", 360)}</span><span class="discovery-copy"><strong>${escapeHtml(book.title || "Untitled book")}</strong><small>${escapeHtml(book.author || "Unknown author")}</small><em>${escapeHtml(note)}</em></span></button></article>`;
+}
+function discoveryLane(title, copy, items) {
+  return `<section class="discovery-lane"><header><div><p class="eyebrow">A LIVING COLLECTION</p><h3>${escapeHtml(title)}</h3><p>${escapeHtml(copy)}</p></div><span>${items.length} ${items.length === 1 ? "book" : "books"}</span></header><div class="discovery-row">${items.map(({ book, note }) => discoveryBookCard(book, note)).join("")}</div></section>`;
+}
+function renderDiscovery() {
+  ui.discovery.removeAttribute("aria-busy");
+  if (!state.books.length) { ui.discovery.innerHTML = '<p class="empty-state">Discovery collections will grow alongside the member bookshelf.</p>'; ui.discoveryStatus.textContent = "No discovery collections yet."; return; }
+  const now = Date.now(), recentWindow = now - 30 * 86400000, scores = new Map(), discussionScores = new Map();
+  state.activities.forEach((activity) => {
+    const book = activityBook(activity); if (!book || timeValue(activity.createdAt) < recentWindow) return;
+    const weight = ["discussed_book", "replied_to_comment", "finished_book"].includes(activity.type) ? 3 : ["rated_book", "recommended_book"].includes(activity.type) ? 2 : 1;
+    const current = scores.get(book.id) || { book, score: 0, latest: 0 }; current.score += weight; current.latest = Math.max(current.latest, timeValue(activity.createdAt)); scores.set(book.id, current);
+    if (["discussed_book", "replied_to_comment"].includes(activity.type)) discussionScores.set(book.id, (discussionScores.get(book.id) || 0) + 1);
+  });
+  state.books.forEach((book) => { const legacy = Array.isArray(book.comments) ? book.comments.length : 0; if (legacy) discussionScores.set(book.id, (discussionScores.get(book.id) || 0) + legacy); });
+  const lanes = [], active = [...scores.values()].sort((a, b) => b.score - a.score || b.latest - a.latest);
+  if (active.length >= 2 || active[0]?.score >= 4) lanes.push(discoveryLane("Active Lately", "Books showing up in the club’s recent reading, ratings, and conversations.", active.slice(0, 6).map((item) => ({ book: item.book, note: `${item.score} recent activity ${item.score === 1 ? "point" : "points"}` }))));
+  const discussed = state.books.map((book) => ({ book, count: discussionScores.get(book.id) || 0 })).filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
+  if (discussed.length >= 2 || discussed[0]?.count >= 2) lanes.push(discoveryLane("In the Conversation", "Books with discussion notes or recent member conversation—not a ranking of readers.", discussed.slice(0, 6).map((item) => ({ book: item.book, note: `${item.count} visible conversation ${item.count === 1 ? "signal" : "signals"}` }))));
+  const newest = recentFirst(state.books).slice(0, 6);
+  lanes.push(discoveryLane("New on the Club Shelf", "The latest recommendations added by members and approved guest readers.", newest.map((book) => ({ book, note: `Added ${dateTimeLabel(book.date)}` }))));
+  const signaled = new Set([...scores.keys(), ...discussionScores.keys(), ...newest.slice(0, 2).map((book) => book.id)]), quiet = state.books.filter((book) => !signaled.has(book.id)).slice(0, 6);
+  if (quiet.length >= 3) lanes.push(discoveryLane("Quiet Finds", "Books with room for the club’s next rating, reaction, or conversation.", quiet.map((book) => ({ book, note: "Waiting for a fresh conversation" }))));
+  ui.discovery.innerHTML = lanes.join(""); ui.discoveryStatus.textContent = `${lanes.length} discovery ${lanes.length === 1 ? "collection" : "collections"} built from current club data.`;
 }
 function activityTypeForStatus(status) { return status === "read" ? "finished_book" : status === "want-to-read" ? "want_to_read" : "started_reading"; }
 function activityDocumentId(type, key) { return `${state.user?.uid || "member"}_${type}_${key}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 220); }
@@ -247,13 +359,13 @@ function syncGoalProgressSubscription() {
   }
   if (state.stopGoalProgress) return;
   state.goalProgressLoaded = false; renderReadingGoal();
-  state.stopGoalProgress = onSnapshot(query(collectionGroup(db, "entries"), where("status", "==", "read"), limit(500)), (snapshot) => {
-    state.completedGoalBooks = snapshot.docs.map((entry) => ({ id: entry.id, ownerId: entry.ref.parent.parent?.id || "", ...entry.data() }));
+  state.stopGoalProgress = onSnapshot(query(collectionGroup(db, "entries"), limit(500)), (snapshot) => {
+    state.completedGoalBooks = snapshot.docs.map((entry) => ({ id: entry.id, ownerId: entry.ref.parent.parent?.id || "", ...entry.data() })).filter((entry) => entry.status === "read");
     state.goalProgressLoaded = true; renderReadingGoal();
   }, (error) => {
     console.warn("Collective reading progress unavailable:", error); state.goalProgressLoaded = false;
     ui.readingGoalTotal.textContent = "Progress is temporarily unavailable";
-    ui.readingGoalContent.innerHTML = '<p class="empty-state">The goal is safe, but finished-book totals could not load. An officer may need to publish the Phase 3 rules or create the prompted Firestore index.</p>';
+    ui.readingGoalContent.innerHTML = '<p class="empty-state">The goal is safe, but finished-book totals could not load. An officer may need to publish the included Firestore rules.</p>';
   });
 }
 async function saveReadingGoal(event) {
@@ -292,7 +404,7 @@ function setAuthUi() {
   ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.readingGoalForm.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember();
   ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review.";
   if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; }
-  syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); syncEventRsvpSubscription(); renderMonth(); renderReadingGoal(); renderEvents(); renderMemoryOptions(); renderMemories(); renderBoard(); renderPending(); renderBookReactions();
+  syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); syncEventRsvpSubscription(); syncDashboardSubscriptions(); renderDashboard(); renderDiscovery(); renderMonth(); renderReadingGoal(); renderEvents(); renderMemoryOptions(); renderMemories(); renderBoard(); renderPending(); renderBookReactions();
 }
 
 function optimizedImageUrl(url, width = 600) {
@@ -373,7 +485,7 @@ async function reviewPending(id, approve) {
         if (String(pending.why || "").trim()) await updateDoc(doc(db, "books", existing.id), { comments: arrayUnion({ name: pending.name || "Guest reader", text: String(pending.why).trim().slice(0, 500), date: new Date().toISOString() }) });
         toast(existing && pending.why ? "Added the guest’s note to the existing book discussion." : "That book was already on the shelf, so no duplicate was created.");
       } else {
-        await addDoc(collection(db, "books"), { name: pending.name || "Guest reader", memberName: pending.name || "Guest reader", title: pending.title || "Untitled book", author: pending.author || "Unknown author", genre: pending.genre || "", coverUrl: pending.coverUrl || "", why: pending.why || "", synopsis: pending.synopsis || "", catalogKey: pending.catalogKey || "", catalogId: pending.catalogId || "", openLibraryKey: pending.openLibraryKey || "", googleBooksId: pending.googleBooksId || "", isbn: pending.isbn || "", publicationYear: String(pending.publicationYear || ""), source: pending.source || "", date: pending.date || new Date().toISOString(), comments: [] });
+        await addDoc(collection(db, "books"), withPageCount({ name: pending.name || "Guest reader", memberName: pending.name || "Guest reader", title: pending.title || "Untitled book", author: pending.author || "Unknown author", genre: pending.genre || "", coverUrl: pending.coverUrl || "", why: pending.why || "", synopsis: pending.synopsis || "", catalogKey: pending.catalogKey || "", catalogId: pending.catalogId || "", openLibraryKey: pending.openLibraryKey || "", googleBooksId: pending.googleBooksId || "", isbn: pending.isbn || "", publicationYear: String(pending.publicationYear || ""), source: pending.source || "", date: pending.date || new Date().toISOString(), comments: [] }, pending.pageCount));
         toast("Guest suggestion approved and added to the shelf.");
       }
     }
@@ -406,7 +518,7 @@ function renderMonth() {
   else { ui.monthStars.value = "5"; ui.monthFinished.checked = false; ui.monthComment.value = ""; }
   ui.monthNotes.innerHTML = state.ratings.filter((item) => item.comment).length ? state.ratings.filter((item) => item.comment).map((item) => `<article class="month-note"><strong>${escapeHtml(item.displayName || "Club member")}</strong><span>${"★".repeat(Number(item.stars || 0))}</span><p>${escapeHtml(item.comment)}</p></article>`).join("") : '<p class="empty-state">No discussion notes yet. Be the first to leave one.</p>';
 }
-function subscribeRatings() { state.stopRatings?.(); state.ratings = []; const book = currentBook(); if (!book) return renderMonth(); state.stopRatings = onSnapshot(collection(db, "bookOfMonthRatings", book.id, "members"), (snapshot) => { state.ratings = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMonth(); }, () => { ui.monthNotes.innerHTML = '<p class="empty-state">Ratings are unavailable right now.</p>'; }); }
+function subscribeRatings() { state.stopRatings?.(); state.ratings = []; state.dashboardRatings = []; const book = currentBook(); if (!book) { renderDashboard(); return renderMonth(); } state.stopRatings = onSnapshot(collection(db, "bookOfMonthRatings", book.id, "members"), (snapshot) => { state.ratings = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.dashboardRatings = isMember() ? state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: book.id })) : []; renderMonth(); renderDashboard(); }, () => { ui.monthNotes.innerHTML = '<p class="empty-state">Ratings are unavailable right now.</p>'; state.dashboardRatings = []; renderDashboard(); }); }
 function subscribeMonthRecommendation() { state.stopMonthReasons?.(); state.monthRecommendationWhy = ""; const book = currentBook(); if (!book) return renderMonth(); state.stopMonthReasons = onSnapshot(collection(db, "books", book.id, "recommendations"), (snapshot) => { state.monthRecommendationWhy = snapshot.docs.map((entry) => entry.data().reason).find(Boolean) || ""; renderMonth(); }, () => renderMonth()); }
 
 function ensureMonthAccentControl() { if ($("monthAccent")) return; const label = document.createElement("label"); label.innerHTML = 'Highlight colour <input id="monthAccent" type="color" aria-label="Book of the Month highlight colour">'; ui.monthOfficer.prepend(label); $("monthAccent").value = state.monthAccent; }
@@ -486,7 +598,7 @@ async function selectCatalogBook(index) {
   ui.catalogMessage.textContent = "Loading book details…";
   try {
     const book = await loadCatalogDetails(result); state.catalogBook = book; state.catalogDuplicateConfirmation = ""; ui.catalogGenre.value = String(book.genre || "").slice(0, 80);
-    ui.catalogPreviewBook.innerHTML = `<div class="catalog-preview-book">${catalogCover(book, "catalog-preview-cover")}<div><p class="eyebrow">${escapeHtml(book.source || "BOOK CATALOGUE")}</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p><p class="catalog-meta">${book.publicationYear ? `First published ${escapeHtml(book.publicationYear)}` : "Publication date unavailable"}${book.isbn ? ` · ISBN ${escapeHtml(book.isbn)}` : ""}</p>${book.synopsis ? `<p>${escapeHtml(book.synopsis)}</p>` : '<p class="catalog-meta">No synopsis is available for this edition.</p>'}</div></div>`;
+    ui.catalogPreviewBook.innerHTML = `<div class="catalog-preview-book">${catalogCover(book, "catalog-preview-cover")}<div><p class="eyebrow">${escapeHtml(book.source || "BOOK CATALOGUE")}</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p><p class="catalog-meta">${book.publicationYear ? `First published ${escapeHtml(book.publicationYear)}` : "Publication date unavailable"}${book.isbn ? ` · ISBN ${escapeHtml(book.isbn)}` : ""}${pageCountValue(book.pageCount) ? ` · ${pageCountValue(book.pageCount).toLocaleString()} pages` : ""}</p>${book.synopsis ? `<p>${escapeHtml(book.synopsis)}</p>` : '<p class="catalog-meta">No synopsis is available for this edition.</p>'}</div></div>`;
     ui.catalogPreview.hidden = false; ui.catalogMessage.textContent = isMember() ? "Check the details, then choose where to save it." : "Check the details, then send it to the officers for review.";
   } catch (error) {
     console.error(error);
@@ -509,7 +621,7 @@ async function saveCatalogShelfBook(book, status) {
   const existing = await existingShelfEntry(book); const key = `${existing?.id || "new"}:${status}`;
   if (existing && existing.status === status) { ui.catalogMessage.textContent = `This book is already on your ${String(status).replace(/-/g, " ")} shelf.`; return false; }
   if (existing && state.catalogDuplicateConfirmation !== key) { state.catalogDuplicateConfirmation = key; ui.catalogMessage.textContent = `This book is already on your ${String(existing.status || "reading").replace(/-/g, " ")} shelf. Press the button again to move it.`; return false; }
-  const metadata = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() };
+  const metadata = withPageCount({ title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() }, book.pageCount || existing?.pageCount);
   if (status === "read") metadata.completedAt = serverTimestamp();
   if (existing) {
     await setDoc(doc(db, "memberShelves", state.user.uid, "entries", existing.id), metadata, { merge: true });
@@ -539,7 +651,7 @@ function connectionMessage(names, onOwnShelf) {
 async function saveCatalogRecommendation(book) {
   const { publicMatches, names, onOwnShelf } = await findBookConnections(book);
   if (publicMatches.some((item) => item.memberId === state.user.uid)) { ui.catalogMessage.textContent = "You already recommended this book, so another copy was not added."; toast(ui.catalogMessage.textContent); return false; }
-  const recommendation = { title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [] };
+  const recommendation = withPageCount({ title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [] }, book.pageCount);
   const added = await addDoc(collection(db, "books"), recommendation);
   await recordActivity("recommended_book", recommendation, { publicBookId: added.id, key: added.id });
   const reaction = connectionMessage(names, onOwnShelf);
@@ -550,9 +662,9 @@ async function saveGuestCatalogSuggestion(book) {
   const name = ui.catalogGuestName.value.trim();
   if (!name) { ui.catalogMessage.textContent = "Please add your name before sending this suggestion."; ui.catalogGuestName.focus(); return false; }
   const publicMatch = state.books.find((item) => sameBook(item, book));
-  await addDoc(collection(db, "pendingBooks"), {
+  await addDoc(collection(db, "pendingBooks"), withPageCount({
     name, title: book.title || "Untitled book", author: book.author || "Unknown author", genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", why: ui.catalogReason.value.trim(), synopsis: book.synopsis || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [], submittedAt: new Date().toISOString(), status: "pending"
-  });
+  }, book.pageCount));
   const message = publicMatch ? `This book is already on the club shelf. Your note was sent to the officers for review.` : "Thanks — your suggestion was sent to the officers for review.";
   ui.catalogMessage.textContent = message; toast(message); return true;
 }
@@ -596,7 +708,11 @@ async function ensureProfile(user) {
   return profile;
 }
 onAuthStateChanged(auth, async (user) => {
-  if (state.user?.uid !== user?.uid) { state.stopNotifications?.(); state.stopNotifications = null; state.notifications = []; state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvpOwnerId = null; state.eventRsvps = new Map(); }
+  if (state.user?.uid !== user?.uid) {
+    state.stopNotifications?.(); state.stopNotifications = null; state.notifications = [];
+    state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvpOwnerId = null; state.eventRsvps = new Map();
+    state.stopDashboardShelf?.(); state.stopDashboardShelf = null; state.stopDashboardRatings?.(); state.stopDashboardRatings = null; state.dashboardOwnerId = null; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false;
+  }
   state.user = user; state.profile = null;
   if (!user) return setAuthUi();
   try { state.profile = await ensureProfile(user); if (!isMember()) toast("Your member record needs an officer to restore its role."); }
@@ -605,7 +721,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 async function submitSuggestion(event) {
-  event.preventDefault(); const chosenFile = $("suggestFile")?.files?.[0]; const book = { name: $("suggestName").value.trim(), title: $("suggestTitle").value.trim(), author: $("suggestAuthor").value.trim(), genre: $("suggestGenre").value.trim(), coverUrl: $("suggestCover").value.trim(), why: $("suggestWhy").value.trim(), date: new Date().toISOString(), comments: [] };
+  event.preventDefault(); const chosenFile = $("suggestFile")?.files?.[0]; const book = withPageCount({ name: $("suggestName").value.trim(), title: $("suggestTitle").value.trim(), author: $("suggestAuthor").value.trim(), genre: $("suggestGenre").value.trim(), coverUrl: $("suggestCover").value.trim(), why: $("suggestWhy").value.trim(), date: new Date().toISOString(), comments: [] }, $("suggestPages")?.value);
   if (!book.name || !book.title || !book.author) return;
   const button = ui.suggestionForm.querySelector("button[type=submit]"); button.disabled = true;
   try {
@@ -818,7 +934,7 @@ async function openProfile(uid) {
     state.openProfileMember = { id: uid, ...member };
     ui.profileDialog.setAttribute("aria-label", `${member.displayName || "Club member"}’s member library`);
     const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 360))}" alt="Portrait of ${escapeHtml(member.displayName || "club member")}" decoding="async" width="180" height="180">` : escapeHtml(initials(member.displayName));
-    const shelfForm = own && isMember() ? `<button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Add a book</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><button id="openCatalogFromShelf" type="button" class="text-button">Find a book automatically</button><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>A small note <textarea id="shelfNote" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
+    const shelfForm = own && isMember() ? `<button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Add a book</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><button id="openCatalogFromShelf" type="button" class="text-button">Find a book automatically</button><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Page count <input id="shelfPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>A small note <textarea id="shelfNote" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
     const customize = own && isMember() ? `<details class="profile-customize"><summary>Customize my library card</summary><form id="profileForm"><label>Display name <input id="profileNameInput" maxlength="60" value="${escapeHtml(member.displayName || "")}"></label><label>Short bio <textarea id="profileBioInput" maxlength="80">${escapeHtml(member.bio || "")}</textarea></label><label>Library colour <input id="profileColorInput" type="color" value="${accent}"></label><label>Public avatar URL <input id="profilePhotoInput" type="url" maxlength="500" value="${escapeHtml(member.photoURL || "")}" placeholder="Optional image link"></label><label>Or upload an avatar <input id="profilePhotoFile" type="file" accept="image/*"></label><label>Favourite genre <input id="profileGenreInput" maxlength="40" value="${escapeHtml(member.favoriteGenre || "")}" placeholder="e.g. Fantasy"></label><label>Currently reading <input id="profileCurrentInput" maxlength="100" value="${escapeHtml(member.currentlyReading || "")}" placeholder="A book you are into right now"></label><label class="checkbox-line"><input id="profileShowStats" type="checkbox" ${member.showReadingStats !== false ? "checked" : ""}> Show my reading summary to visitors</label><label class="checkbox-line"><input id="profileShareActivity" type="checkbox" ${member.shareActivity === true ? "checked" : ""}> Share meaningful reading activity</label><p class="activity-privacy-note">This shares book titles and actions such as started, finished, rated, or discussed. It never shares your email, notes, or comment text.</p>${isOfficer() ? `<label>Club role label <select id="profileTitleInput"><option value="Officer" ${member.clubTitle !== "President" ? "selected" : ""}>Officer</option><option value="President" ${member.clubTitle === "President" ? "selected" : ""}>President</option></select></label>` : ""}<button type="submit" class="text-button">Save library card</button></form></details>` : "";
     ui.profileContent.innerHTML = `<div class="profile-layout" style="--accent:${accent}"><aside class="profile-side"><div class="profile-avatar">${avatar}</div><h2>${escapeHtml(member.displayName || "Club member")}</h2><p>${escapeHtml(member.bio || "A reader in the Book Enthusiasts Club.")}</p><p>Member since ${escapeHtml(dateLabel(String(member.joinedAt || "").slice(0, 10)))}</p><div class="profile-meta">${member.clubTitle ? `<span>${escapeHtml(member.clubTitle)}</span>` : ""}${member.favoriteGenre ? `<span>Usually reading ${escapeHtml(member.favoriteGenre)}</span>` : ""}${member.currentlyReading ? `<span>Currently: ${escapeHtml(member.currentlyReading)}</span>` : ""}</div>${customize}</aside><section class="profile-library"><p class="eyebrow">PERSONAL LIBRARY</p><h3>${own ? "My shelf" : `${escapeHtml(member.displayName || "Their")}’s shelf`}</h3><div id="libraryStats" class="library-stats"><span class="skeleton skeleton-pill" aria-hidden="true"></span><span class="skeleton skeleton-pill" aria-hidden="true"></span></div><div id="readingSnapshot" class="profile-reading-summary" aria-live="polite"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div><section class="profile-favorites"><div class="profile-section-heading"><h4>Top 3 favorites</h4><p>${own ? "Open a shelf book to pin or unpin it." : "A small peek at their all-time picks."}</p></div><div id="favoriteBooks" class="favorite-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><div id="personalBooks" class="personal-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div>${shelfForm}<section class="profile-activity"><h4>Recent reading activity</h4><div id="memberActivityList" aria-busy="true"><div class="skeleton skeleton-activity" aria-hidden="true"></div></div></section></section></div>`;
     $("profileForm")?.addEventListener("submit", saveProfileCard);
@@ -982,8 +1098,10 @@ function renderShelf(entries) {
   const genreCounts = entries.reduce((counts, entry) => { const genre = String(entry.genre || "").trim(); if (genre) counts.set(genre, (counts.get(genre) || 0) + 1); return counts; }, new Map());
   const topGenre = [...genreCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || "Still exploring";
   state.shelfEntries = entries;
+  const finishedWithPages = entries.filter((entry) => entry.status === "read" && pageCountValue(entry.pageCount));
+  const knownPages = finishedWithPages.reduce((sum, entry) => sum + pageCountValue(entry.pageCount), 0);
   stats.innerHTML = `<span>${entries.length} on shelf</span><span>${reading} reading</span>`;
-  if (snapshot) snapshot.innerHTML = own || member.showReadingStats !== false ? `<article class="reading-summary-card"><strong>${entries.length}</strong><span>books collected</span></article><article class="reading-summary-card"><strong>${read}</strong><span>finished</span></article><article class="reading-summary-card"><strong>${reading}</strong><span>currently reading</span></article><article class="reading-summary-card"><strong>${wanted}</strong><span>want to read</span></article><article class="reading-summary-card"><strong>${escapeHtml(topGenre)}</strong><span>most-shelved genre</span></article>` : '<p class="empty-state">This member keeps their reading summary private.</p>';
+  if (snapshot) snapshot.innerHTML = own || member.showReadingStats !== false ? `<article class="reading-summary-card"><strong>${entries.length}</strong><span>books collected</span></article><article class="reading-summary-card"><strong>${read}</strong><span>finished</span></article><article class="reading-summary-card"><strong>${reading}</strong><span>currently reading</span></article><article class="reading-summary-card"><strong>${wanted}</strong><span>want to read</span></article><article class="reading-summary-card"><strong>${escapeHtml(topGenre)}</strong><span>most-shelved genre</span></article>${knownPages ? `<article class="reading-summary-card"><strong>${knownPages.toLocaleString()}</strong><span>${finishedWithPages.length === read ? "pages finished" : `known pages across ${finishedWithPages.length} finished books`}</span></article>` : ""}` : '<p class="empty-state">This member keeps their reading summary private.</p>';
   if (favorites) {
     const favoriteEntries = preferredIds.map((id) => entries.find((entry) => entry.id === id)).filter(Boolean).slice(0, 3);
     favorites.removeAttribute("aria-busy");
@@ -1018,13 +1136,13 @@ function openBookDetails(book, personal = false) {
   const canEditPublic = !personal && isOfficer();
   const isFavorite = canEditShelf && (state.profile?.favoriteBookIds || []).includes(book.id);
   const shelfEditor = canEditShelf ? `<button id="favoriteToggle" type="button" class="favorite-toggle${isFavorite ? " is-favorite" : ""}" aria-pressed="${String(isFavorite)}">${isFavorite ? "Remove from my Top 3" : "Add to my Top 3"}</button><form id="detailShelfStatusForm" class="book-status-form"><label>Move this book to <select id="detailShelfStatus">${shelfStatusOptions(book.status || "reading")}</select></label><button class="button" type="submit">Update status</button><button id="removeShelfBook" class="text-button danger-button" type="button">Remove from my shelf</button><p id="bookDetailMessage" class="form-message" aria-live="polite"></p></form>` : "";
-  const publicEditor = canEditPublic ? `<form id="bookEditForm" class="book-edit-form"><h3>Officer book details</h3><label>Title <input id="bookEditTitle" maxlength="160" value="${escapeHtml(title)}" required></label><label>Author <input id="bookEditAuthor" maxlength="100" value="${escapeHtml(book.author || "")}" required></label><label>Genre <input id="bookEditGenre" maxlength="80" value="${escapeHtml(book.genre || "")}"></label><label>Cover URL <input id="bookEditCover" type="url" maxlength="500" value="${escapeHtml(book.coverUrl || "")}"></label><label>Or upload a cover <input id="bookEditCoverFile" type="file" accept="image/*"></label><label>About the book <textarea id="bookEditSynopsis" maxlength="3000">${escapeHtml(about)}</textarea></label><button class="button" type="submit">Save book details</button><p id="bookEditMessage" class="form-message" aria-live="polite"></p></form>` : "";
-  const personalDetails = `<p><strong>${escapeHtml(String(book.status || "reading").replace(/-/g, " "))}</strong></p>${book.note ? `<p><strong>Reader’s note</strong><br>${escapeHtml(book.note)}</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${shelfEditor}`;
+  const publicEditor = canEditPublic ? `<form id="bookEditForm" class="book-edit-form"><h3>Officer book details</h3><label>Title <input id="bookEditTitle" maxlength="160" value="${escapeHtml(title)}" required></label><label>Author <input id="bookEditAuthor" maxlength="100" value="${escapeHtml(book.author || "")}" required></label><label>Genre <input id="bookEditGenre" maxlength="80" value="${escapeHtml(book.genre || "")}"></label><label>Page count <input id="bookEditPages" type="number" min="1" max="10000" inputmode="numeric" value="${pageCountValue(book.pageCount) || ""}" placeholder="Optional"></label><label>Cover URL <input id="bookEditCover" type="url" maxlength="500" value="${escapeHtml(book.coverUrl || "")}"></label><label>Or upload a cover <input id="bookEditCoverFile" type="file" accept="image/*"></label><label>About the book <textarea id="bookEditSynopsis" maxlength="3000">${escapeHtml(about)}</textarea></label><button class="button" type="submit">Save book details</button><p id="bookEditMessage" class="form-message" aria-live="polite"></p></form>` : "";
+  const personalDetails = `<p><strong>${escapeHtml(String(book.status || "reading").replace(/-/g, " "))}</strong>${pageCountValue(book.pageCount) ? ` · ${pageCountValue(book.pageCount).toLocaleString()} pages` : ""}</p>${book.note ? `<p><strong>Reader’s note</strong><br>${escapeHtml(book.note)}</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${shelfEditor}`;
   if (!personal) { state.activeBookId = book.id; state.legacyBookComments = normalizeLegacyComments(book.comments || []); }
   const reactions = `<section class="book-reactions" aria-labelledby="reactionHeading"><div><h3 id="reactionHeading">Quick reactions</h3><p>A small pulse-check from club readers. Each member gets one reaction per book.</p></div><div id="reactionSummary" class="reaction-summary" aria-live="polite"><p class="empty-state">Loading reactions…</p></div><div id="reactionPicker" class="reaction-picker"></div><p id="reactionStatus" class="form-message" aria-live="polite"></p></section>`;
   const discussion = `<section class="book-discussion" aria-labelledby="bookDiscussionHeading"><h3 id="bookDiscussionHeading">Club discussion</h3><p class="catalog-meta">Leave a note, reply to another reader, or tuck spoilers safely behind a warning.</p><div id="bookCommentList" class="book-comment-list">${renderCommentList(state.legacyBookComments)}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><div id="bookReplyContext" class="reply-context" hidden><span id="bookReplyLabel"></span><button type="button" class="text-button" data-cancel-reply>Cancel reply</button></div><label id="bookCommentFormLabel" for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><div class="comment-options"><label class="spoiler-toggle"><input id="bookCommentSpoiler" type="checkbox"> Hide this note as a spoiler</label><label id="bookSpoilerScopeLabel" hidden>Spoiler label (optional)<input id="bookSpoilerScope" maxlength="80" placeholder="For example: ending or chapter 12"></label></div><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can read everything here, then join the discussion after signing in.</p>'}</section>`;
   const reroll = !personal && state.randomPickerActive ? '<button type="button" class="button button-quiet surprise-again" data-surprise-again>🎲 Pick another book</button>' : "";
-  const publicDetails = `${reroll}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${reactions}${discussion}${publicEditor}`;
+  const publicDetails = `${reroll}${pageCountValue(book.pageCount) ? `<p class="catalog-meta">${pageCountValue(book.pageCount).toLocaleString()} pages in this edition</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${reactions}${discussion}${publicEditor}`;
   ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup({ ...book, title })}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div></div>`;
   if (!ui.bookDialog.open) showDialog(ui.bookDialog);
   $("detailShelfStatusForm")?.addEventListener("submit", (event) => updateShelfStatus(event, book.id));
@@ -1129,13 +1247,13 @@ async function saveBookMetadata(event, bookId) {
   await runBusy(button, "Saving…", async () => {
     try {
       const coverFile = $("bookEditCoverFile")?.files?.[0];
-      await setDoc(doc(db, "books", bookId), {
+      await setDoc(doc(db, "books", bookId), withPageCount({
         title: $("bookEditTitle").value.trim(),
         author: $("bookEditAuthor").value.trim(),
         genre: $("bookEditGenre").value.trim(),
         coverUrl: coverFile ? await uploadImage(coverFile) : $("bookEditCover").value.trim(),
         synopsis: $("bookEditSynopsis").value.trim()
-      }, { merge: true });
+      }, $("bookEditPages")?.value), { merge: true });
       $("bookEditMessage").textContent = "Book details saved. The member’s personal reason was left unchanged.";
       toast("Book details updated.");
     } catch (error) {
@@ -1157,7 +1275,7 @@ async function addShelfBook(event) {
       const file = $("shelfFile")?.files?.[0];
       const coverUrl = $("shelfCover").value.trim() || (file ? await uploadImage(file) : "");
       const status = $("shelfStatus").value;
-      const shelfBook = {
+      const shelfBook = withPageCount({
         title: candidate.title,
         author: candidate.author,
         genre: $("shelfGenre").value.trim(),
@@ -1165,7 +1283,7 @@ async function addShelfBook(event) {
         status,
         note: $("shelfNote").value.trim(),
         date: new Date().toISOString()
-      };
+      }, $("shelfPages")?.value);
       if (status === "read") shelfBook.completedAt = serverTimestamp();
       const added = await addDoc(collection(db, "memberShelves", state.openProfileId, "entries"), shelfBook);
       await recordActivity(activityTypeForStatus(status), shelfBook, { shelfEntryId: added.id, key: `${added.id}_${status}` });
@@ -1178,9 +1296,9 @@ async function addShelfBook(event) {
   });
 }
 
-onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); renderNotifications(); renderMemoryOptions(); renderMemories(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
-onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); renderNotifications(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
-onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.activityLoaded = true; renderActivityFeed(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; });
+onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); renderNotifications(); renderMemoryOptions(); renderMemories(); renderDashboard(); renderDiscovery(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
+onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); renderNotifications(); renderDashboard(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
+onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.activityLoaded = true; renderActivityFeed(); renderDiscovery(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; renderDiscovery(); });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { const pick = snapshot.data() || {}; state.currentPickId = pick.bookId || null; state.monthAccent = /^#[0-9a-f]{6}$/i.test(pick.highlightColor || "") ? pick.highlightColor : "#d8e66f"; if ($("monthAccent")) $("monthAccent").value = state.monthAccent; renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { toast("Book of the Month could not load."); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement yet—check back after the next library meeting."; if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
 onSnapshot(doc(db, "siteSettings", "readingGoal"), (snapshot) => { state.readingGoal = snapshot.exists() ? snapshot.data() : null; syncGoalProgressSubscription(); renderReadingGoal(); }, (error) => { console.warn("Reading goal unavailable:", error); ui.readingGoalTotal.textContent = "Reading goal unavailable"; ui.readingGoalContent.innerHTML = '<p class="empty-state">The shared goal could not load. The rest of the site is still available.</p>'; });
@@ -1199,7 +1317,7 @@ onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.doc
 onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMemories(); }, () => { ui.memories.innerHTML = '<p class="empty-state">Reading memories are unavailable right now.</p>'; });
 onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
 
-ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid));
+ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid)); ui.dashboardOpenLibrary.addEventListener("click", () => openProfile(state.user.uid));
 ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
 ui.bookDialog.addEventListener("close", stopBookSocialSubscriptions);
 ui.notificationButton.addEventListener("click", () => { renderNotifications(); showDialog(ui.notificationDialog); });
@@ -1236,6 +1354,9 @@ document.addEventListener("click", async (event) => {
   if (catalogResult) await selectCatalogBook(Number(catalogResult.dataset.catalogResult));
   const monthDescriptionToggle = event.target.closest("[data-toggle-month-description]");
   if (monthDescriptionToggle) { const synopsis = $(monthDescriptionToggle.getAttribute("aria-controls")); const expanded = monthDescriptionToggle.getAttribute("aria-expanded") === "true"; synopsis?.classList.toggle("is-collapsed", expanded); monthDescriptionToggle.setAttribute("aria-expanded", String(!expanded)); monthDescriptionToggle.textContent = expanded ? "Read full description" : "Show less"; }
+  const dashboardBook = event.target.closest("[data-dashboard-book-id]");
+  if (dashboardBook) openDashboardBook(dashboardBook.dataset.dashboardBookId);
+  if (event.target.closest("[data-open-dashboard-library]") && isMember()) openProfile(state.user.uid);
   const book = event.target.closest("[data-book-id]");
   if (book) { const item = state.books.find((entry) => entry.id === book.dataset.bookId); if (item) { state.randomPickerActive = false; openBookDetails(item); } }
   const shelfBook = event.target.closest("[data-shelf-book-id]");
