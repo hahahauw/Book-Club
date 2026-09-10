@@ -106,8 +106,9 @@ function activityRows(items, compact = false) {
   }).join("");
 }
 function renderActivityFeed() {
+  const expanded = ui.activityFeed.querySelector(".activity-more")?.open;
   ui.activityFeed.removeAttribute("aria-busy");
-  ui.activityFeed.innerHTML = state.activities.length ? `<ol class="activity-list">${activityRows(state.activities)}</ol>` : '<p class="empty-state">No public reading activity yet. Members can choose to share updates from their library cards.</p>';
+  ui.activityFeed.innerHTML = state.activities.length ? `<ol class="activity-list">${activityRows(newestActivities(state.activities).slice(0, 3))}</ol>${state.activities.length > 3 ? `<details class="activity-more" ${expanded ? "open" : ""}><summary>More reading updates (${state.activities.length - 3})</summary><ol class="activity-list">${activityRows(newestActivities(state.activities).slice(3))}</ol></details>` : ""}` : '<p class="empty-state">No public reading activity yet. Members can choose to share updates from their library cards.</p>';
   ui.activityStatus.textContent = state.activities.length ? `${state.activities.length} recent club ${state.activities.length === 1 ? "activity" : "activities"} loaded.` : "No public club activity yet.";
 }
 function renderMemberActivity() {
@@ -206,7 +207,7 @@ function discoveryLane(title, copy, items) {
 }
 function renderDiscovery() {
   ui.discovery.removeAttribute("aria-busy");
-  if (!state.books.length) { ui.discovery.innerHTML = '<p class="empty-state">Discovery collections will grow alongside the member bookshelf.</p>'; ui.discoveryStatus.textContent = "No discovery collections yet."; return; }
+  if (!state.books.length) { ui.discovery.innerHTML = '<p class="empty-state">Discovery collections will grow alongside the member bookshelf.</p>'; ui.discoveryStatus.textContent = "No discovery collections yet."; $("discoveryCategory").innerHTML = '<option>No collections yet</option>'; $("discoveryCategory").disabled = true; return; }
   const now = Date.now(), recentWindow = now - 30 * 86400000, scores = new Map(), discussionScores = new Map();
   state.activities.forEach((activity) => {
     const book = activityBook(activity); if (!book || timeValue(activity.createdAt) < recentWindow) return;
@@ -216,15 +217,28 @@ function renderDiscovery() {
   });
   state.books.forEach((book) => { const legacy = Array.isArray(book.comments) ? book.comments.length : 0; if (legacy) discussionScores.set(book.id, (discussionScores.get(book.id) || 0) + legacy); });
   const lanes = [], active = [...scores.values()].sort((a, b) => b.score - a.score || b.latest - a.latest);
-  if (active.length >= 2 || active[0]?.score >= 4) lanes.push(discoveryLane("Active Lately", "Books showing up in the club’s recent reading, ratings, and conversations.", active.slice(0, 6).map((item) => ({ book: item.book, note: `${item.score} recent activity ${item.score === 1 ? "point" : "points"}` }))));
+  if (active.length >= 2 || active[0]?.score >= 4) lanes.push(discoveryLane("Active Lately", "Books showing up in the club’s recent reading, ratings, and conversations.", active.slice(0, 6).map((item) => ({ book: item.book, note: "Recently read or shared" }))));
   const discussed = state.books.map((book) => ({ book, count: discussionScores.get(book.id) || 0 })).filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
-  if (discussed.length >= 2 || discussed[0]?.count >= 2) lanes.push(discoveryLane("In the Conversation", "Books with discussion notes or recent member conversation—not a ranking of readers.", discussed.slice(0, 6).map((item) => ({ book: item.book, note: `${item.count} visible conversation ${item.count === 1 ? "signal" : "signals"}` }))));
+  if (discussed.length >= 2 || discussed[0]?.count >= 2) lanes.push(discoveryLane("In the Conversation", "Books with notes and conversations to explore.", discussed.slice(0, 6).map((item) => ({ book: item.book, note: "Readers are talking about this" }))));
   const newest = recentFirst(state.books).slice(0, 6);
   lanes.push(discoveryLane("New on the Club Shelf", "The latest recommendations added by members and approved guest readers.", newest.map((book) => ({ book, note: `Added ${dateTimeLabel(book.date)}` }))));
   const signaled = new Set([...scores.keys(), ...discussionScores.keys(), ...newest.slice(0, 2).map((book) => book.id)]), quiet = state.books.filter((book) => !signaled.has(book.id)).slice(0, 6);
   if (quiet.length >= 3) lanes.push(discoveryLane("Quiet Finds", "Books with room for the club’s next rating, reaction, or conversation.", quiet.map((book) => ({ book, note: "Waiting for a fresh conversation" }))));
-  ui.discovery.innerHTML = lanes.join(""); ui.discoveryStatus.textContent = `${lanes.length} discovery ${lanes.length === 1 ? "collection" : "collections"} built from current club data.`;
+  const picker = $("discoveryCategory"), previous = picker.value;
+  ui.discovery.innerHTML = lanes.join("");
+  const sections = [...ui.discovery.querySelectorAll(".discovery-lane")];
+  picker.innerHTML = sections.map((section) => { const title = section.querySelector("h3").textContent; return `<option value="${escapeHtml(title)}">${escapeHtml(title)}</option>`; }).join("");
+  picker.disabled = false;
+  if (sections.some((section) => section.querySelector("h3").textContent === previous)) picker.value = previous;
+  showDiscoveryCategory();
 }
+function showDiscoveryCategory() {
+  const selected = $("discoveryCategory").value;
+  ui.discovery.querySelectorAll(".discovery-lane").forEach((section) => { section.hidden = section.querySelector("h3").textContent !== selected; });
+  ui.discoveryStatus.textContent = selected ? `Showing ${selected}.` : "No collections yet.";
+}
+$("discoveryCategory").addEventListener("change", showDiscoveryCategory);
+
 function activityTypeForStatus(status) { return status === "read" ? "finished_book" : status === "want-to-read" ? "want_to_read" : "started_reading"; }
 function activityDocumentId(type, key) { return `${state.user?.uid || "member"}_${type}_${key}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 220); }
 async function recordActivity(type, book, options = {}) {
@@ -327,9 +341,9 @@ async function markAllNotificationsRead() {
 async function openNotificationTarget(id) {
   const notification = state.notifications.find((item) => item.id === id); if (!notification) return;
   await markNotificationRead(id); closeDialog(ui.notificationDialog);
-  if (notification.type === "discussion_reply") { const book = state.books.find((item) => item.id === notification.bookId); if (book) { state.randomPickerActive = false; openBookDetails(book); requestAnimationFrame(() => $("bookCommentList")?.scrollIntoView({ behavior: "smooth", block: "start" })); } else toast("That book is no longer on the public shelf."); return; }
+  if (notification.type === "discussion_reply") { const book = state.books.find((item) => item.id === notification.bookId); if (book) { state.randomPickerActive = false; openBookDetails(book); requestAnimationFrame(() => $("bookCommentList")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })); } else toast("That book is no longer on the public shelf."); return; }
   const target = notification.type === "book_of_month_changed" ? $("monthHeading") : notification.type === "announcement_updated" ? $("announcementHeading") : $("events");
-  requestAnimationFrame(() => target?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  requestAnimationFrame(() => target?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
 }
 
 function localDateKey(date = new Date()) {
@@ -444,11 +458,11 @@ function updateShelfNavigation() {
   const scrollable = !expanded && ui.books.scrollWidth > ui.books.clientWidth + 2;
   ui.shelfPrevious.disabled = !scrollable || ui.books.scrollLeft <= 2; ui.shelfNext.disabled = !scrollable || ui.books.scrollLeft + ui.books.clientWidth >= ui.books.scrollWidth - 2;
 }
-function moveShelf(direction) { const card = ui.books.querySelector(".book-card"); const distance = card ? card.getBoundingClientRect().width + 12 : ui.books.clientWidth * .8; ui.books.scrollBy({ left: direction * distance * 2, behavior: "smooth" }); }
-function toggleShelfLayout() { ui.books.classList.toggle("is-expanded"); sessionStorage.setItem("becShelfExpanded", String(ui.books.classList.contains("is-expanded"))); ui.books.scrollTo({ left: 0, behavior: "smooth" }); updateShelfNavigation(); }
+function moveShelf(direction) { const card = ui.books.querySelector(".book-card"); const distance = card ? card.getBoundingClientRect().width + 12 : ui.books.clientWidth * .8; ui.books.scrollBy({ left: direction * distance * 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
+function toggleShelfLayout() { ui.books.classList.toggle("is-expanded"); sessionStorage.setItem("becShelfExpanded", String(ui.books.classList.contains("is-expanded"))); ui.books.scrollTo({ left: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); updateShelfNavigation(); }
 function visibleBooks() {
   const term = state.search.toLowerCase();
-  return recentFirst(state.books).filter((book) => (!state.genre || book.genre === state.genre) && (!term || [book.title, book.author, book.genre, book.name, book.memberName].some((value) => String(value || "").toLowerCase().includes(term))));
+  return recentFirst(state.books).filter((book) => (!state.genre || genreParts(book).some((genre) => genre.toLocaleLowerCase() === state.genre)) && (!term || [book.title, book.author, book.genre, book.name, book.memberName].some((value) => String(value || "").toLowerCase().includes(term))));
 }
 function pickRandomBook() {
   const unique = visibleBooks().filter((book, index, books) => books.findIndex((candidate) => sameBook(candidate, book)) === index);
@@ -463,11 +477,12 @@ function renderBooks() {
   ui.books.removeAttribute("aria-busy");
   ui.books.classList.toggle("is-expanded", sessionStorage.getItem("becShelfExpanded") === "true");
   ui.search.value = state.search;
-  const allGenres = [...new Set(state.books.map((book) => String(book.genre || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const allGenres = [...new Set(state.books.flatMap(genreParts).map((genre) => genre.toLocaleLowerCase()))].sort();
+  state.genre = allGenres.includes(state.genre.toLocaleLowerCase()) ? state.genre.toLocaleLowerCase() : "";
   const selected = state.genre; ui.genre.innerHTML = '<option value="">All genres</option>' + allGenres.map((genre) => `<option value="${escapeHtml(genre)}">${escapeHtml(genre)}</option>`).join(""); ui.genre.value = selected;
   const books = visibleBooks();
   ui.shelfResultStatus.textContent = `${books.length} book${books.length === 1 ? "" : "s"} shown.`;
-  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span>${escapeHtml(book.title)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
+  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span class="shelf-book-copy"><strong>${escapeHtml(book.title)}</strong><small>${escapeHtml(book.author || "Unknown author")}</small></span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
   ui.monthPicker.innerHTML = '<option value="">Choose a book</option>' + recentFirst(state.books).map((book) => `<option value="${escapeHtml(book.id)}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
   renderMonth(); requestAnimationFrame(() => { if (!ui.books.classList.contains("is-expanded")) ui.books.scrollLeft = Math.min(scrollLeft, Math.max(0, ui.books.scrollWidth - ui.books.clientWidth)); updateShelfNavigation(); });
 }
@@ -513,18 +528,15 @@ function renderMonth() {
   ui.month.style.setProperty("--month-accent", state.monthAccent);
   const reason = book.why || state.monthRecommendationWhy || "";
   const recommender = book.memberName || book.name || "a club member";
-  const story = [
-    reason ? `<div class="month-description"><strong>Why ${escapeHtml(recommender)} recommends it</strong><p>${escapeHtml(reason)}</p></div>` : "",
-    book.synopsis ? `<div class="month-description"><strong>About the book</strong><p id="monthSynopsis" class="month-synopsis is-collapsed">${escapeHtml(book.synopsis)}</p>${String(book.synopsis).length > 280 ? '<button type="button" class="text-button month-description-toggle" data-toggle-month-description aria-expanded="false" aria-controls="monthSynopsis">Read full description</button>' : ""}</div>` : "",
-    !reason && !book.synopsis ? '<p>Read along at your own pace, then leave a rating or discussion note.</p>' : ""
-  ].join("");
-  ui.month.innerHTML = `<div class="month-cover">${coverMarkup(book, "", "eager")}</div><div><p class="eyebrow">BOOK OF THE MONTH</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p>${story}<button type="button" class="text-button month-details" data-book-id="${escapeHtml(book.id)}">Open book details</button></div>`;
+  const preview = reason || book.synopsis || "Read along at your own pace, then join the conversation.";
+  const story = `<div class="month-description"><strong>${reason ? `Recommended by ${escapeHtml(recommender)}` : "About this month’s pick"}</strong><p>${escapeHtml(String(preview).length > 240 ? String(preview).slice(0, 237) + "…" : preview)}</p></div>`;
+  ui.month.innerHTML = `<div class="month-cover">${coverMarkup(book, "", "eager")}</div><div><p class="eyebrow">BOOK OF THE MONTH</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p>${story}<button type="button" class="button month-details" data-book-id="${escapeHtml(book.id)}">View book &amp; discussion</button></div>`;
   ui.monthCommunity.hidden = false;
   ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember();
-  const count = Math.max(state.members.length, 1), finished = state.ratings.filter((item) => item.finished).length;
+  const count = state.ratings.length, finished = state.ratings.filter((item) => item.finished).length;
   const average = state.ratings.length ? (state.ratings.reduce((sum, item) => sum + Number(item.stars || 0), 0) / state.ratings.length).toFixed(1) : "";
-  ui.monthRating.textContent = average ? `${"★".repeat(Math.round(average))} ${average}/5` : "No ratings yet";
-  ui.monthProgress.textContent = `${Math.round((finished / count) * 100)}% finished`;
+  ui.monthRating.textContent = average ? `★ ${average}/5 · ${count} ${count === 1 ? "rating" : "ratings"}` : "No ratings yet";
+  ui.monthProgress.textContent = count ? `${finished} of ${count} responding readers finished` : "No reading updates yet";
   const mine = state.ratings.find((item) => item.memberId === state.user?.uid);
   if (mine) { ui.monthStars.value = String(mine.stars || 5); ui.monthFinished.checked = Boolean(mine.finished); ui.monthComment.value = mine.comment || ""; }
   else { ui.monthStars.value = "5"; ui.monthFinished.checked = false; ui.monthComment.value = ""; }
@@ -822,10 +834,11 @@ function eventCard(event, past) {
   return `<article id="event-${escapeHtml(event.id)}" class="event"><time datetime="${escapeHtml(event.date || "")}">${escapeHtml(eventDateLabel(event.date))}</time><div><h3>${escapeHtml(event.title)}</h3>${event.details ? `<p>${escapeHtml(event.details)}</p>` : ""}</div>${eventRsvpMarkup(event, past)}${eventMemoryStrip(event.id)}${officerAction}</article>`;
 }
 function renderEvents() {
+  const archiveOpen = ui.events.querySelector(".event-archive")?.open;
   if (!state.events.length) { ui.events.innerHTML = '<p class="empty-state">No events have been added yet.</p>'; return; }
   const today = localDateKey(), upcoming = [...state.events].filter((event) => String(event.date || "") >= today).sort((a, b) => String(a.date).localeCompare(String(b.date))), past = [...state.events].filter((event) => String(event.date || "") < today).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const group = (title, items, isPast) => `<section class="event-group${isPast ? " is-past" : ""}"><header class="event-group-header"><h3 class="event-group-title">${title}</h3><span class="event-group-count">${items.length} ${items.length === 1 ? "event" : "events"}</span></header><div class="event-group-list">${items.length ? items.map((event) => eventCard(event, isPast)).join("") : `<p class="empty-state">${isPast ? "Past club days will collect here." : "Nothing is scheduled yet."}</p>`}</div></section>`;
-  ui.events.innerHTML = `<div class="event-groups">${group("Coming up", upcoming, false)}${group("From the club archive", past, true)}</div>`;
+  ui.events.innerHTML = `<div class="event-groups">${group("Coming up", upcoming, false)}${past.length ? `<details class="event-archive" ${archiveOpen ? "open" : ""}><summary>Past events (${past.length})</summary>${group("From the club archive", past, true)}</details>` : ""}</div>`;
 }
 async function saveEventRsvp(eventId, status) {
   if (!isMember() || !["going", "maybe", "cant_attend"].includes(status) || state.rsvpBusy.has(eventId)) return;
@@ -891,7 +904,7 @@ function resetMemoryEditor() {
 }
 function editMemory(memoryId) {
   if (!isOfficer()) return; const memory = state.memories.find((item) => item.id === memoryId); if (!memory) return;
-  state.memoryEditingId = memoryId; ui.memoryEditId.value = memoryId; ui.memoryImage.value = memory.imageUrl || ""; ui.memoryCaption.value = memory.title || ""; ui.memoryCategory.value = memory.category || ""; renderMemoryOptions(); ui.memoryEvent.value = memory.eventId || ""; ui.memoryBook.value = memory.bookId || ""; ui.memorySave.textContent = "Save changes"; ui.memoryCancelEdit.hidden = false; ui.memoryStatus.textContent = "Editing this memory. Leave the image fields unchanged to keep its current photo."; ui.memoryForm.scrollIntoView({ behavior: "smooth", block: "center" }); ui.memoryCaption.focus();
+  state.memoryEditingId = memoryId; ui.memoryEditId.value = memoryId; ui.memoryImage.value = memory.imageUrl || ""; ui.memoryCaption.value = memory.title || ""; ui.memoryCategory.value = memory.category || ""; renderMemoryOptions(); ui.memoryEvent.value = memory.eventId || ""; ui.memoryBook.value = memory.bookId || ""; ui.memorySave.textContent = "Save changes"; ui.memoryCancelEdit.hidden = false; ui.memoryStatus.textContent = "Editing this memory. Leave the image fields unchanged to keep its current photo."; ui.memoryForm.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); ui.memoryCaption.focus();
 }
 async function addMemory(event) {
   event.preventDefault(); if (!isOfficer()) return;
@@ -1073,7 +1086,7 @@ function renderBookReactions() {
   summary.innerHTML = active.length ? active.map(([code, emoji, label]) => `<span class="reaction-summary-chip"><span aria-hidden="true">${emoji}</span>${escapeHtml(label)} <strong>${counts.get(code)}</strong></span>`).join("") : '<p class="empty-state">No reactions yet. Members can add the first one.</p>';
   const mine = state.bookReactions.find((item) => item.memberId === state.user?.uid)?.reaction || "";
   picker.innerHTML = isMember() ? REACTION_OPTIONS.map(([code, emoji, label]) => `<button type="button" class="reaction-chip${mine === code ? " is-selected" : ""}" data-book-reaction="${code}" aria-pressed="${String(mine === code)}" ${state.reactionBusy ? "disabled" : ""}><span aria-hidden="true">${emoji}</span>${escapeHtml(label)}</button>`).join("") : '<p class="form-message">Sign in with an invited member account to add a reaction.</p>';
-  if (status && !state.reactionBusy && !status.dataset.keepMessage) status.textContent = mine ? "Your reaction is visible in the total." : "Choose one reaction that fits this book.";
+  if (status && !state.reactionBusy && !status.dataset.keepMessage) status.textContent = !isMember() ? "" : mine ? "Your reaction is visible in the total." : "Choose one reaction that fits this book.";
 }
 function subscribeBookReactions(bookId) {
   state.stopBookReactions?.(); state.stopBookReactions = null; state.reactionBookId = bookId; state.bookReactions = []; renderBookReactions();
@@ -1114,11 +1127,12 @@ function renderShelf(entries) {
   state.shelfEntries = entries;
   const finishedWithPages = entries.filter((entry) => entry.status === "read" && pageCountValue(entry.pageCount));
   const knownPages = finishedWithPages.reduce((sum, entry) => sum + pageCountValue(entry.pageCount), 0);
-  stats.innerHTML = `<span>${entries.length} on shelf</span><span>${reading} reading</span>`;
+  stats.innerHTML = `<span>${entries.length} ${entries.length === 1 ? "book" : "books"} on shelf</span>`;
   if (snapshot) snapshot.innerHTML = own || member.showReadingStats !== false ? `<article class="reading-summary-card"><strong>${entries.length}</strong><span>books collected</span></article><article class="reading-summary-card"><strong>${read}</strong><span>finished</span></article><article class="reading-summary-card"><strong>${reading}</strong><span>currently reading</span></article><article class="reading-summary-card"><strong>${wanted}</strong><span>want to read</span></article><article class="reading-summary-card"><strong>${escapeHtml(topGenre)}</strong><span>most-shelved genre</span></article>${knownPages ? `<article class="reading-summary-card"><strong>${knownPages.toLocaleString()}</strong><span>${finishedWithPages.length === read ? "pages finished" : `known pages across ${finishedWithPages.length} finished books`}</span></article>` : ""}` : '<p class="empty-state">This member keeps their reading summary private.</p>';
   if (favorites) {
     const favoriteEntries = preferredIds.map((id) => entries.find((entry) => entry.id === id)).filter(Boolean).slice(0, 3);
     favorites.removeAttribute("aria-busy");
+    favorites.closest(".profile-favorites").hidden = !own && !favoriteEntries.length;
     favorites.innerHTML = favoriteEntries.length ? favoriteEntries.map((entry, index) => `<article class="favorite-book"><button type="button" class="favorite-book-open" data-shelf-book-id="${escapeHtml(entry.id)}"><span class="favorite-cover">${automaticCoverUrl(entry) ? coverImageMarkup(entry, 320) : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</span><span class="favorite-title">${escapeHtml(entry.title)}</span><span class="favorite-position">Favorite ${index + 1}</span></button></article>`).join("") : `<p class="empty-state">${own ? "No favorites pinned yet. Open one of your shelf books to add it to your Top 3." : "No favorite books shared yet."}</p>`;
   }
   shelf.removeAttribute("aria-busy");
@@ -1156,8 +1170,8 @@ function openBookDetails(book, personal = false) {
   const reactions = `<section class="book-reactions" aria-labelledby="reactionHeading"><div><h3 id="reactionHeading">Quick reactions</h3><p>A small pulse-check from club readers. Each member gets one reaction per book.</p></div><div id="reactionSummary" class="reaction-summary" aria-live="polite"><p class="empty-state">Loading reactions…</p></div><div id="reactionPicker" class="reaction-picker"></div><p id="reactionStatus" class="form-message" aria-live="polite"></p></section>`;
   const discussion = `<section class="book-discussion" aria-labelledby="bookDiscussionHeading"><h3 id="bookDiscussionHeading">Club discussion</h3><p class="catalog-meta">Leave a note, reply to another reader, or tuck spoilers safely behind a warning.</p><div id="bookCommentList" class="book-comment-list">${renderCommentList(state.legacyBookComments)}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><div id="bookReplyContext" class="reply-context" hidden><span id="bookReplyLabel"></span><button type="button" class="text-button" data-cancel-reply>Cancel reply</button></div><label id="bookCommentFormLabel" for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><div class="comment-options"><label class="spoiler-toggle"><input id="bookCommentSpoiler" type="checkbox"> Hide this note as a spoiler</label><label id="bookSpoilerScopeLabel" hidden>Spoiler label (optional)<input id="bookSpoilerScope" maxlength="80" placeholder="For example: ending or chapter 12"></label></div><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can read everything here, then join the discussion after signing in.</p>'}</section>`;
   const reroll = !personal && state.randomPickerActive ? '<button type="button" class="button button-quiet surprise-again" data-surprise-again>🎲 Pick another book</button>' : "";
-  const publicDetails = `${reroll}${pageCountValue(book.pageCount) ? `<p class="catalog-meta">${pageCountValue(book.pageCount).toLocaleString()} pages in this edition</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${reactions}${discussion}${publicEditor}`;
-  ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup({ ...book, title })}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div></div>`;
+  const publicDetails = `${reroll}${pageCountValue(book.pageCount) ? `<p class="catalog-meta">${pageCountValue(book.pageCount).toLocaleString()} pages in this edition</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${publicEditor}`;
+  ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup({ ...book, title })}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div>${personal ? "" : `<div class="book-conversation">${reactions}${discussion}</div>`}</div>`;
   if (!ui.bookDialog.open) showDialog(ui.bookDialog);
   $("detailShelfStatusForm")?.addEventListener("submit", (event) => updateShelfStatus(event, book.id));
   $("favoriteToggle")?.addEventListener("click", () => toggleFavorite(book.id));
@@ -1367,9 +1381,9 @@ document.addEventListener("click", async (event) => {
   const memoryEdit = event.target.closest("[data-edit-memory]");
   if (memoryEdit) editMemory(memoryEdit.dataset.editMemory);
   const memoryFocus = event.target.closest("[data-memory-focus]");
-  if (memoryFocus) { const target = $(`memory-${memoryFocus.dataset.memoryFocus}`); target?.scrollIntoView({ behavior: "smooth", block: "center" }); target?.animate?.([{ outlineColor: "transparent" }, { outlineColor: "var(--orange)" }, { outlineColor: "transparent" }], { duration: 1300 }); }
+  if (memoryFocus) { const target = $(`memory-${memoryFocus.dataset.memoryFocus}`); target?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); target?.animate?.([{ outlineColor: "transparent" }, { outlineColor: "var(--orange)" }, { outlineColor: "transparent" }], { duration: 1300 }); }
   const eventJump = event.target.closest("[data-event-jump]");
-  if (eventJump?.dataset.eventJump) $(`event-${eventJump.dataset.eventJump}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (eventJump?.dataset.eventJump) $(`event-${eventJump.dataset.eventJump}`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
   const catalogResult = event.target.closest("[data-catalog-result]");
   if (catalogResult) await selectCatalogBook(Number(catalogResult.dataset.catalogResult));
   const monthDescriptionToggle = event.target.closest("[data-toggle-month-description]");
