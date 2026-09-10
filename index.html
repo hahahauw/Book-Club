@@ -9,14 +9,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="reading-room.css?v=1">
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Book Enthusiasts Club home"><span class="brand-mark">B</span><span>Book Enthusiasts<br>Club</span></a>
-    <nav class="desktop-nav" aria-label="Main navigation"><a href="#shelf">Bookshelf</a><a href="#discovery">Discover</a><a href="#events">Events</a><a href="#members">Members</a></nav>
+    <nav class="desktop-nav" aria-label="Main navigation"><a href="#shelf">Club shelf</a><a href="#discovery">Discover</a><a href="#events">Club life</a><a href="#members">Members</a></nav>
     <div class="auth-area"><button id="themeButton" type="button" class="button button-quiet">Dark mode</button><button id="notificationButton" type="button" class="button button-quiet notification-button" aria-haspopup="dialog" aria-label="Notifications" hidden><span class="notification-symbol" aria-hidden="true">🔔</span><span class="notification-label">Updates</span><span id="notificationBadge" class="notification-badge" hidden>0</span></button><span id="authStatus" aria-live="polite">Exploring as a guest</span><button id="signInButton" type="button" class="button button-quiet">Member sign in</button><button id="profileButton" type="button" class="button button-quiet" hidden>My library</button><button id="signOutButton" type="button" class="button button-quiet" hidden>Sign out</button></div>
   </header>
 
+  <a class="skip-link" href="#shelf">Skip to club shelf</a>
   <main id="top">
     <section class="hero shell">
       <p class="eyebrow">EST. 2026 · A CLUB FOR CURIOUS READERS</p>
@@ -28,6 +30,14 @@
 
     <section class="shell announcement-section" aria-labelledby="announcementHeading"><div class="announcement-card"><span class="notice-pin" aria-hidden="true">✦</span><div><p class="eyebrow">A NOTE FROM THE CLUB DESK</p><h2 id="announcementHeading">Announcements</h2><p id="announcementText">No announcement yet—check back after the next library meeting.</p><form id="announcementForm" class="announcement-form" hidden><label for="announcementInput">Officer update</label><textarea id="announcementInput" maxlength="600" placeholder="Share a meeting reminder or club update…"></textarea><button class="button" type="submit">Save announcement</button><span id="announcementStatus" class="form-message" aria-live="polite"></span></form></div></div></section>
 
+    <section id="personalDashboard" class="shell personal-dashboard" aria-labelledby="dashboardHeading" hidden>
+      <header class="dashboard-header"><div><p class="eyebrow">MY READING DESK</p><h2 id="dashboardHeading">Your Reading Dashboard</h2><p id="dashboardGreeting" class="section-copy">A private-at-a-glance view built from your own library shelf.</p></div><button id="dashboardOpenLibrary" class="button button-quiet" type="button">Open my full library</button></header>
+      <div id="dashboardStats" class="dashboard-stats" aria-busy="true"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div>
+      <div class="dashboard-summaries"><article id="dashboardMonth" class="dashboard-summary"><span class="skeleton skeleton-activity" aria-hidden="true"></span></article><article id="dashboardYear" class="dashboard-summary"><span class="skeleton skeleton-activity" aria-hidden="true"></span></article></div>
+      <div class="dashboard-shelves"><section><div class="dashboard-shelf-heading"><h3>Currently Reading</h3><span>On your desk</span></div><div id="dashboardReading" class="dashboard-book-row" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><section><div class="dashboard-shelf-heading"><h3>Up Next</h3><span>Want to Read</span></div><div id="dashboardWanted" class="dashboard-book-row" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><section><div class="dashboard-shelf-heading"><h3>Recently Finished</h3><span>Your latest endings</span></div><div id="dashboardFinished" class="dashboard-book-row" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section></div>
+      <p id="dashboardStatus" class="form-message dashboard-status" aria-live="polite"></p>
+    </section>
+
     <section class="shell feature-section" aria-labelledby="monthHeading">
       <div class="section-label"><span>01</span><h2 id="monthHeading">Book of the Month</h2></div>
       <div id="bookOfMonth" class="month-card">
@@ -36,10 +46,23 @@
       </div>
       <div id="monthCommunity" class="month-community" hidden>
         <div class="month-summary"><span id="monthRating">No ratings yet</span><span id="monthProgress">0% finished</span></div>
-        <form id="monthForm" class="compact-form"><label>Your rating <select id="monthStars"><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Not for me</option><option value="1">★☆☆☆☆ — Finished it</option></select></label><label class="checkbox-line"><input id="monthFinished" type="checkbox"> I finished this book</label><label>Discussion note <textarea id="monthComment" maxlength="280" placeholder="A thought, a favourite part, a question…"></textarea></label><button class="button" type="submit">Save my update</button></form>
-        <p id="monthMessage" class="form-message"></p><div id="monthNotes" class="month-notes"></div>
+        <details class="month-updates"><summary>Reader updates &amp; ratings</summary><form id="monthForm" class="compact-form"><label>Your rating <select id="monthStars"><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Not for me</option><option value="1">★☆☆☆☆ — Finished it</option></select></label><label class="checkbox-line"><input id="monthFinished" type="checkbox"> I finished this book</label><label>Discussion note <textarea id="monthComment" maxlength="280" placeholder="A thought, a favourite part, a question…"></textarea></label><button class="button" type="submit">Save my update</button></form>
+        <p id="monthMessage" class="form-message"></p><div id="monthNotes" class="month-notes"></div></details>
       </div>
       <div id="monthOfficer" class="officer-panel" hidden><label>Choose the Book of the Month <select id="monthPicker"></select></label><button id="saveMonthButton" class="button" type="button">Set selected book</button></div>
+    </section>
+
+    <section id="shelf" class="shell shelf-section" aria-labelledby="shelfHeading">
+      <div class="section-label"><span>02</span><h2 id="shelfHeading">The Club Shelf</h2></div>
+      <div class="section-intro"><div><p>Every cover carries a recommendation from a reader in the club.</p><p id="suggestionHint" class="action-hint">Everyone can search the catalogue. Guest suggestions are sent to officers for review.</p></div><div class="shelf-actions"><button id="openPendingButton" type="button" class="button button-quiet" hidden>Review guest suggestions <span id="pendingCount" class="count-badge">0</span></button><button id="openSuggestionButton" type="button" class="button">Suggest a book</button></div></div>
+      <div class="shelf-controls"><label class="visually-hidden" for="bookSearch">Search books</label><input id="bookSearch" type="search" placeholder="Search title, author, or genre"><label class="visually-hidden" for="genreFilter">Filter by genre</label><select id="genreFilter"><option value="">All genres</option></select><button id="surpriseBookButton" type="button" class="button button-quiet random-book-button">🎲 Surprise me</button></div>
+      <p id="shelfResultStatus" class="visually-hidden" role="status" aria-live="polite"></p><div id="shelfNavigation" class="shelf-navigation" aria-label="Bookshelf navigation"><button id="shelfPreviousButton" class="text-button shelf-step" type="button" aria-label="Show previous books">← Previous</button><button id="shelfExpandButton" class="text-button" type="button" aria-expanded="false" aria-controls="booksGrid">Show all books</button><button id="shelfNextButton" class="text-button shelf-step" type="button" aria-label="Show next books">Next →</button></div><div id="booksGrid" class="books-grid" aria-busy="true"><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span></div>
+    </section>
+
+    <section id="discovery" class="shell discovery-section" aria-labelledby="discoveryHeading">
+      <div class="section-label"><span>✦</span><h2 id="discoveryHeading">Discover Around the Club</h2></div><p class="section-copy">Find a new arrival, revisit a conversation, or choose something unexpected.</p>
+      <div class="discovery-filter"><label for="discoveryCategory">Explore a collection</label><select id="discoveryCategory"></select></div><div id="discoveryCollections" class="discovery-collections" aria-busy="true"><section class="discovery-lane"><div class="skeleton skeleton-activity" aria-hidden="true"></div><div class="skeleton-grid" aria-hidden="true"><span class="skeleton skeleton-book"></span><span class="skeleton skeleton-book"></span><span class="skeleton skeleton-book"></span></div></section></div>
+      <p id="discoveryStatus" class="visually-hidden" role="status" aria-live="polite">Building discovery collections.</p>
     </section>
 
     <section id="activity" class="shell activity-section" aria-labelledby="activityHeading">
@@ -55,27 +78,6 @@
         <div id="readingGoalContent" aria-live="polite"><div class="skeleton skeleton-activity" aria-hidden="true"></div></div>
         <form id="readingGoalForm" class="officer-panel reading-goal-form" hidden><label>Goal name <input id="readingGoalTitle" maxlength="100" placeholder="Our next 50 books" required></label><label>Books to finish <input id="readingGoalTarget" type="number" min="1" max="1000" inputmode="numeric" value="50" required></label><label>Finish by (optional) <input id="readingGoalEndDate" type="date"></label><button id="readingGoalStartButton" class="button" type="submit">Start a new goal</button><button id="readingGoalEndButton" class="button button-quiet" type="button" hidden>Finish current goal</button><span id="readingGoalStatus" class="form-message" aria-live="polite"></span></form>
       </div>
-    </section>
-
-    <section id="personalDashboard" class="shell personal-dashboard" aria-labelledby="dashboardHeading" hidden>
-      <header class="dashboard-header"><div><p class="eyebrow">MY READING DESK</p><h2 id="dashboardHeading">Your Reading Dashboard</h2><p id="dashboardGreeting" class="section-copy">A private-at-a-glance view built from your own library shelf.</p></div><button id="dashboardOpenLibrary" class="button button-quiet" type="button">Open my full library</button></header>
-      <div id="dashboardStats" class="dashboard-stats" aria-busy="true"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div>
-      <div class="dashboard-summaries"><article id="dashboardMonth" class="dashboard-summary"><span class="skeleton skeleton-activity" aria-hidden="true"></span></article><article id="dashboardYear" class="dashboard-summary"><span class="skeleton skeleton-activity" aria-hidden="true"></span></article></div>
-      <div class="dashboard-shelves"><section><div class="dashboard-shelf-heading"><h3>Currently Reading</h3><span>On your desk</span></div><div id="dashboardReading" class="dashboard-book-row" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><section><div class="dashboard-shelf-heading"><h3>Up Next</h3><span>Want to Read</span></div><div id="dashboardWanted" class="dashboard-book-row" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><section><div class="dashboard-shelf-heading"><h3>Recently Finished</h3><span>Your latest endings</span></div><div id="dashboardFinished" class="dashboard-book-row" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section></div>
-      <p id="dashboardStatus" class="form-message dashboard-status" aria-live="polite"></p>
-    </section>
-
-    <section id="shelf" class="shell shelf-section" aria-labelledby="shelfHeading">
-      <div class="section-label"><span>02</span><h2 id="shelfHeading">The Member Bookshelf</h2></div>
-      <div class="section-intro"><div><p>Every cover carries a recommendation from a reader in the club.</p><p id="suggestionHint" class="action-hint">Everyone can search the catalogue. Guest suggestions are sent to officers for review.</p></div><div class="shelf-actions"><button id="openPendingButton" type="button" class="button button-quiet" hidden>Review guest suggestions <span id="pendingCount" class="count-badge">0</span></button><button id="openSuggestionButton" type="button" class="button">Suggest a book</button></div></div>
-      <div class="shelf-controls"><label class="visually-hidden" for="bookSearch">Search books</label><input id="bookSearch" type="search" placeholder="Search title, author, or genre"><label class="visually-hidden" for="genreFilter">Filter by genre</label><select id="genreFilter"><option value="">All genres</option></select><button id="surpriseBookButton" type="button" class="button button-quiet random-book-button">🎲 Surprise me</button></div>
-      <p id="shelfResultStatus" class="visually-hidden" role="status" aria-live="polite"></p><div id="shelfNavigation" class="shelf-navigation" aria-label="Bookshelf navigation"><button id="shelfPreviousButton" class="text-button shelf-step" type="button" aria-label="Show previous books">← Previous</button><button id="shelfExpandButton" class="text-button" type="button" aria-expanded="false" aria-controls="booksGrid">Show all books</button><button id="shelfNextButton" class="text-button shelf-step" type="button" aria-label="Show next books">Next →</button></div><div id="booksGrid" class="books-grid" aria-busy="true"><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span><span class="skeleton skeleton-book" aria-hidden="true"></span></div>
-    </section>
-
-    <section id="discovery" class="shell discovery-section" aria-labelledby="discoveryHeading">
-      <div class="section-label"><span>✦</span><h2 id="discoveryHeading">Discover Around the Club</h2></div><p class="section-copy">Living collections shaped by recent club reading, discussions, and the books arriving on our shelf—not a popularity contest.</p>
-      <div id="discoveryCollections" class="discovery-collections" aria-busy="true"><section class="discovery-lane"><div class="skeleton skeleton-activity" aria-hidden="true"></div><div class="skeleton-grid" aria-hidden="true"><span class="skeleton skeleton-book"></span><span class="skeleton skeleton-book"></span><span class="skeleton skeleton-book"></span></div></section></div>
-      <p id="discoveryStatus" class="visually-hidden" role="status" aria-live="polite">Building discovery collections.</p>
     </section>
 
     <section id="events" class="shell split-section" aria-labelledby="eventsHeading">
@@ -108,6 +110,6 @@
   <dialog id="notificationDialog" class="dialog" aria-labelledby="notificationDialogTitle"><article class="dialog-card notification-dialog-card"><button class="close-dialog" type="button" data-close="notificationDialog" aria-label="Close">×</button><div class="notification-header"><div><p class="eyebrow">YOUR CLUB UPDATES</p><h2 id="notificationDialogTitle">Notifications</h2></div><button id="markNotificationsRead" type="button" class="text-button">Mark all as read</button></div><p class="catalog-intro">Direct replies and important club updates appear here—nothing noisy.</p><div id="notificationList" class="notification-list" aria-busy="true"><span class="skeleton skeleton-activity" aria-hidden="true"></span><span class="skeleton skeleton-activity" aria-hidden="true"></span></div><p id="notificationStatus" class="form-message" aria-live="polite"></p></article></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" popover="manual"></div>
-  <script type="module" src="app.js?v=16"></script>
+  <script type="module" src="app.js?v=17"></script>
 </body>
 </html>
