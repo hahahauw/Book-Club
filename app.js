@@ -37,7 +37,19 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-function escapeHtml(value) { const box = document.createElement("div"); box.textContent = String(value ?? ""); return box.innerHTML; }
+// For HTML text and quoted attributes only; never interpolate into executable code.
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[character]);
+}
+function safeImageUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol === "http:") url.protocol = "https:";
+    return url.protocol === "https:" && !url.username && !url.password ? url.href : "";
+  } catch { return ""; }
+}
 function initials(name) { return String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); }
 function color(value) { return /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#ed7857"; }
 function asDate(value) { if (value?.toDate instanceof Function) return value.toDate(); if (Number.isFinite(value?.seconds)) return new Date(value.seconds * 1000); return new Date(value || ""); }
@@ -70,7 +82,7 @@ function toast(message) {
 function showDialog(dialog, focusTarget) { state.lastDialogTrigger = document.activeElement; dialog.showModal(); requestAnimationFrame(() => (focusTarget || dialog.querySelector("input,select,textarea,button"))?.focus()); }
 function closeDialog(dialog) { if (!dialog?.open) return; dialog.close(); const trigger = state.lastDialogTrigger; state.lastDialogTrigger = null; if (trigger?.isConnected) requestAnimationFrame(() => trigger.focus()); }
 async function runBusy(button, busyText, action) { if (!button || button.disabled) return; const label = button.textContent; button.disabled = true; if (busyText) button.textContent = busyText; try { return await action(); } finally { button.disabled = false; button.textContent = label; } }
-function activityMember(actorId) { return state.members.find((member) => member.id === actorId) || (actorId === state.user?.uid ? { id: actorId, ...state.profile } : { id: actorId, displayName: "A club member", photoURL: "" }); }
+function activityMember(actorId) { return state.members.find((member) => member.id === actorId) || (actorId === state.user?.uid ? { ...state.profile, id: actorId } : { id: actorId, displayName: "A club member", photoURL: "" }); }
 function activityAction(activity) {
   const actions = {
     started_reading: "started reading",
@@ -174,14 +186,14 @@ function syncDashboardSubscriptions() {
   if (state.dashboardOwnerId === state.user.uid && state.stopDashboardShelf) return;
   state.stopDashboardShelf?.(); state.stopDashboardRatings?.(); state.dashboardOwnerId = state.user.uid; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false; renderDashboard();
   state.stopDashboardShelf = onSnapshot(query(collection(db, "memberShelves", state.user.uid, "entries"), limit(300)), (snapshot) => {
-    state.dashboardShelfEntries = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.dashboardLoaded = true;
+    state.dashboardShelfEntries = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.dashboardLoaded = true;
     if (state.openProfileId === state.user.uid) state.shelfEntries = state.dashboardShelfEntries; renderDashboard();
   }, (error) => { console.warn("Personal dashboard shelf unavailable:", error); state.dashboardLoaded = true; ui.dashboardStats.removeAttribute("aria-busy"); ui.dashboardStats.innerHTML = '<p class="empty-state">Your dashboard could not load, but My library is still available.</p>'; ui.dashboardStatus.textContent = "Check the published Firestore rules and try reopening the page."; });
   state.dashboardRatings = state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: state.currentPickId || "" })); state.dashboardRatingsLoaded = true;
 }
 function openDashboardBook(entryId) {
   if (!isMember()) return; const entry = state.dashboardShelfEntries.find((book) => book.id === entryId); if (!entry) return;
-  state.openProfileId = state.user.uid; state.openProfileMember = { id: state.user.uid, ...state.profile }; state.shelfEntries = state.dashboardShelfEntries; state.randomPickerActive = false; openBookDetails(entry, true);
+  state.openProfileId = state.user.uid; state.openProfileMember = { ...state.profile, id: state.user.uid }; state.shelfEntries = state.dashboardShelfEntries; state.randomPickerActive = false; openBookDetails(entry, true);
 }
 function activityBook(activity) {
   return state.books.find((book) => book.id === activity.publicBookId) || state.books.find((book) => sameBook(book, { title: activity.bookTitle, author: activity.bookAuthor }));
@@ -274,7 +286,7 @@ function syncNotificationSubscription() {
   if (state.stopNotifications) return;
   ui.notificationList.setAttribute("aria-busy", "true");
   ui.notificationList.innerHTML = '<span class="skeleton skeleton-activity" aria-hidden="true"></span><span class="skeleton skeleton-activity" aria-hidden="true"></span>';
-  state.stopNotifications = onSnapshot(query(collection(db, "members", state.user.uid, "notifications"), orderBy("createdAt", "desc"), limit(50)), (snapshot) => { state.notifications = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderNotifications(); }, (error) => { console.warn("Notifications unavailable:", error); ui.notificationList.removeAttribute("aria-busy"); ui.notificationList.innerHTML = '<p class="empty-state">Notifications could not load. The rest of the site is still available.</p>'; ui.notificationStatus.textContent = "Notifications could not load."; });
+  state.stopNotifications = onSnapshot(query(collection(db, "members", state.user.uid, "notifications"), orderBy("createdAt", "desc"), limit(50)), (snapshot) => { state.notifications = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderNotifications(); }, (error) => { console.warn("Notifications unavailable:", error); ui.notificationList.removeAttribute("aria-busy"); ui.notificationList.innerHTML = '<p class="empty-state">Notifications could not load. The rest of the site is still available.</p>'; ui.notificationStatus.textContent = "Notifications could not load."; });
 }
 async function createReplyNotification(book, parent, replyId) {
   if (!isMember() || !parent?.memberId || parent.memberId === state.user.uid || parent.legacy) return false;
@@ -288,7 +300,7 @@ async function publishClubNotifications(type, identifiers = {}) {
   const notificationId = type === "book_of_month_changed" ? "book_of_month" : type === "announcement_updated" ? "announcement" : `event_${identifiers.eventId || "update"}`;
   try {
     let memberPool = state.members;
-    if (!memberPool.length) { const snapshot = await getDocs(query(collection(db, "members"), limit(100))); memberPool = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); }
+    if (!memberPool.length) { const snapshot = await getDocs(query(collection(db, "members"), limit(100))); memberPool = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); }
     const recipients = memberPool.filter((member) => member.id && member.id !== actorId && ["member", "officer"].includes(member.role)).slice(0, 100);
     if (!recipients.length) return true;
     // Small batches stay comfortably inside Firestore Security Rules' document-access limit.
@@ -360,7 +372,7 @@ function syncGoalProgressSubscription() {
   if (state.stopGoalProgress) return;
   state.goalProgressLoaded = false; renderReadingGoal();
   state.stopGoalProgress = onSnapshot(query(collectionGroup(db, "entries"), limit(500)), (snapshot) => {
-    state.completedGoalBooks = snapshot.docs.map((entry) => ({ id: entry.id, ownerId: entry.ref.parent.parent?.id || "", ...entry.data() })).filter((entry) => entry.status === "read");
+    state.completedGoalBooks = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id, ownerId: entry.ref.parent.parent?.id || "" })).filter((entry) => entry.status === "read");
     state.goalProgressLoaded = true; renderReadingGoal();
   }, (error) => {
     console.warn("Collective reading progress unavailable:", error); state.goalProgressLoaded = false;
@@ -395,7 +407,7 @@ function syncEventRsvpSubscription() {
   if (state.stopEventRsvps && state.eventRsvpOwnerId === state.user.uid) return;
   state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvps = new Map(); state.eventRsvpOwnerId = state.user.uid;
   state.stopEventRsvps = onSnapshot(query(collection(db, "members", state.user.uid, "eventRsvps"), limit(100)), (snapshot) => {
-    state.eventRsvps = new Map(snapshot.docs.map((entry) => [entry.id, { id: entry.id, ...entry.data() }])); renderEvents();
+    state.eventRsvps = new Map(snapshot.docs.map((entry) => [entry.id, { ...entry.data(), id: entry.id }])); renderEvents();
   }, (error) => { console.warn("Your event responses are unavailable:", error); state.eventRsvps = new Map(); renderEvents(); });
 }
 function setAuthUi() {
@@ -408,14 +420,14 @@ function setAuthUi() {
 }
 
 function optimizedImageUrl(url, width = 600) {
-  const value = String(url || "");
+  const value = safeImageUrl(url);
   if (/res\.cloudinary\.com\/[^/]+\/image\/upload\//i.test(value)) return value.replace(/\/image\/upload\//i, `/image/upload/f_auto,q_auto,c_limit,w_${Math.round(width)}/`);
   if (width <= 240 && /covers\.openlibrary\.org\/.*-L\.jpg/i.test(value)) return value.replace(/-L\.jpg/i, "-M.jpg");
   return value;
 }
-function automaticCoverUrl(book) { const isbn = String(book?.isbn || "").replace(/[^0-9X]/gi, ""); if (book?.coverUrl) return book.coverUrl; if (book?.googleBooksId) return `https://books.google.com/books/content?id=${encodeURIComponent(book.googleBooksId)}&printsec=frontcover&img=1&zoom=2&source=gbs_api`; if (isbn) return `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-L.jpg?default=false`; return ""; }
+function automaticCoverUrl(book) { const isbn = String(book?.isbn || "").replace(/[^0-9X]/gi, ""); if (safeImageUrl(book?.coverUrl)) return safeImageUrl(book.coverUrl); if (book?.googleBooksId) return `https://books.google.com/books/content?id=${encodeURIComponent(book.googleBooksId)}&printsec=frontcover&img=1&zoom=2&source=gbs_api`; if (isbn) return `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-L.jpg?default=false`; return ""; }
 function coverRetryAttributes(book) { return `data-cover-title="${escapeHtml(book.title || "")}" data-cover-author="${escapeHtml(book.author || "")}" data-cover-isbn="${escapeHtml(book.isbn || "")}" data-google-books-id="${escapeHtml(book.googleBooksId || "")}"`; }
-function coverImageMarkup(book, width = 600, className = "", loading = "lazy") { return `<img class="${className}" src="${escapeHtml(optimizedImageUrl(automaticCoverUrl(book), width))}" alt="Cover of ${escapeHtml(book.title || "Untitled book")}" ${coverRetryAttributes(book)} loading="${loading}" decoding="async" referrerpolicy="no-referrer" ${loading === "eager" ? 'fetchpriority="high"' : ""} width="400" height="600">`; }
+function coverImageMarkup(book, width = 600, className = "", loading = "lazy") { return `<img class="${escapeHtml(className)}" src="${escapeHtml(optimizedImageUrl(automaticCoverUrl(book), width))}" alt="Cover of ${escapeHtml(book.title || "Untitled book")}" ${coverRetryAttributes(book)} loading="${escapeHtml(loading)}" decoding="async" referrerpolicy="no-referrer" ${loading === "eager" ? 'fetchpriority="high"' : ""} width="400" height="600">`; }
 function coverMarkup(book, className = "", loading = "lazy", width = 600) { return automaticCoverUrl(book) ? coverImageMarkup(book, width, className, loading) : `<div class="fallback-cover">${escapeHtml(book.title || "Untitled book")}</div>`; }
 const shelfAddedMessages = [
   "Added to your shelf — another story has found a home.",
@@ -455,8 +467,8 @@ function renderBooks() {
   const selected = state.genre; ui.genre.innerHTML = '<option value="">All genres</option>' + allGenres.map((genre) => `<option value="${escapeHtml(genre)}">${escapeHtml(genre)}</option>`).join(""); ui.genre.value = selected;
   const books = visibleBooks();
   ui.shelfResultStatus.textContent = `${books.length} book${books.length === 1 ? "" : "s"} shown.`;
-  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${book.id}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span>${escapeHtml(book.title)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
-  ui.monthPicker.innerHTML = '<option value="">Choose a book</option>' + recentFirst(state.books).map((book) => `<option value="${book.id}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
+  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span>${escapeHtml(book.title)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
+  ui.monthPicker.innerHTML = '<option value="">Choose a book</option>' + recentFirst(state.books).map((book) => `<option value="${escapeHtml(book.id)}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
   renderMonth(); requestAnimationFrame(() => { if (!ui.books.classList.contains("is-expanded")) ui.books.scrollLeft = Math.min(scrollLeft, Math.max(0, ui.books.scrollWidth - ui.books.clientWidth)); updateShelfNavigation(); });
 }
 
@@ -464,7 +476,7 @@ function renderPending() {
   ui.pendingCount.textContent = String(state.pendingBooks.length);
   ui.pendingList.innerHTML = state.pendingBooks.length ? recentFirst(state.pendingBooks).map((book) => {
     const duplicate = state.books.some((item) => sameBook(item, book));
-    return `<article class="pending-item"><div><p class="eyebrow">${duplicate ? "ALREADY ON THE CLUB SHELF" : "NEW GUEST SUGGESTION"}</p><h3>${escapeHtml(book.title || "Untitled book")}</h3><p>by ${escapeHtml(book.author || "Unknown author")}${book.genre ? ` · ${escapeHtml(book.genre)}` : ""}</p>${book.why ? `<blockquote>${escapeHtml(book.why)}</blockquote>` : ""}<small>Suggested by ${escapeHtml(book.name || "a guest reader")}</small></div><div class="pending-actions"><button type="button" class="button" data-approve-pending="${book.id}">${duplicate ? "Add note to existing book" : "Approve"}</button><button type="button" class="text-button" data-reject-pending="${book.id}">Reject</button></div></article>`;
+    return `<article class="pending-item"><div><p class="eyebrow">${duplicate ? "ALREADY ON THE CLUB SHELF" : "NEW GUEST SUGGESTION"}</p><h3>${escapeHtml(book.title || "Untitled book")}</h3><p>by ${escapeHtml(book.author || "Unknown author")}${book.genre ? ` · ${escapeHtml(book.genre)}` : ""}</p>${book.why ? `<blockquote>${escapeHtml(book.why)}</blockquote>` : ""}<small>Suggested by ${escapeHtml(book.name || "a guest reader")}</small></div><div class="pending-actions"><button type="button" class="button" data-approve-pending="${escapeHtml(book.id)}">${duplicate ? "Add note to existing book" : "Approve"}</button><button type="button" class="text-button" data-reject-pending="${escapeHtml(book.id)}">Reject</button></div></article>`;
   }).join("") : '<p class="empty-state">The guest suggestion queue is clear.</p>';
 }
 function syncPendingSubscription() {
@@ -472,7 +484,7 @@ function syncPendingSubscription() {
     state.stopPending?.(); state.stopPending = null; state.pendingBooks = []; renderPending(); return;
   }
   if (state.stopPending) return;
-  state.stopPending = onSnapshot(collection(db, "pendingBooks"), (snapshot) => { state.pendingBooks = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderPending(); }, (error) => { console.error(error); ui.pendingList.innerHTML = '<p class="empty-state">The review queue could not load. Check the published rules.</p>'; });
+  state.stopPending = onSnapshot(collection(db, "pendingBooks"), (snapshot) => { state.pendingBooks = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderPending(); }, (error) => { console.error(error); ui.pendingList.innerHTML = '<p class="empty-state">The review queue could not load. Check the published rules.</p>'; });
 }
 async function reviewPending(id, approve) {
   if (!isOfficer()) return;
@@ -518,7 +530,7 @@ function renderMonth() {
   else { ui.monthStars.value = "5"; ui.monthFinished.checked = false; ui.monthComment.value = ""; }
   ui.monthNotes.innerHTML = state.ratings.filter((item) => item.comment).length ? state.ratings.filter((item) => item.comment).map((item) => `<article class="month-note"><strong>${escapeHtml(item.displayName || "Club member")}</strong><span>${"★".repeat(Number(item.stars || 0))}</span><p>${escapeHtml(item.comment)}</p></article>`).join("") : '<p class="empty-state">No discussion notes yet. Be the first to leave one.</p>';
 }
-function subscribeRatings() { state.stopRatings?.(); state.ratings = []; state.dashboardRatings = []; const book = currentBook(); if (!book) { renderDashboard(); return renderMonth(); } state.stopRatings = onSnapshot(collection(db, "bookOfMonthRatings", book.id, "members"), (snapshot) => { state.ratings = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.dashboardRatings = isMember() ? state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: book.id })) : []; renderMonth(); renderDashboard(); }, () => { ui.monthNotes.innerHTML = '<p class="empty-state">Ratings are unavailable right now.</p>'; state.dashboardRatings = []; renderDashboard(); }); }
+function subscribeRatings() { state.stopRatings?.(); state.ratings = []; state.dashboardRatings = []; const book = currentBook(); if (!book) { renderDashboard(); return renderMonth(); } state.stopRatings = onSnapshot(collection(db, "bookOfMonthRatings", book.id, "members"), (snapshot) => { state.ratings = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.dashboardRatings = isMember() ? state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: book.id })) : []; renderMonth(); renderDashboard(); }, () => { ui.monthNotes.innerHTML = '<p class="empty-state">Ratings are unavailable right now.</p>'; state.dashboardRatings = []; renderDashboard(); }); }
 function subscribeMonthRecommendation() { state.stopMonthReasons?.(); state.monthRecommendationWhy = ""; const book = currentBook(); if (!book) return renderMonth(); state.stopMonthReasons = onSnapshot(collection(db, "books", book.id, "recommendations"), (snapshot) => { state.monthRecommendationWhy = snapshot.docs.map((entry) => entry.data().reason).find(Boolean) || ""; renderMonth(); }, () => renderMonth()); }
 
 function ensureMonthAccentControl() { if ($("monthAccent")) return; const label = document.createElement("label"); label.innerHTML = 'Highlight colour <input id="monthAccent" type="color" aria-label="Book of the Month highlight colour">'; ui.monthOfficer.prepend(label); $("monthAccent").value = state.monthAccent; }
@@ -612,10 +624,10 @@ async function selectCatalogBook(index) {
 async function existingShelfEntry(book) {
   if (book.catalogKey) {
     const shelf = await getDocs(query(collection(db, "memberShelves", state.user.uid, "entries"), where("catalogKey", "==", book.catalogKey), limit(1)));
-    if (!shelf.empty) return { id: shelf.docs[0].id, ...shelf.docs[0].data() };
+    if (!shelf.empty) return { ...shelf.docs[0].data(), id: shelf.docs[0].id };
   }
   const legacy = await getDocs(collection(db, "memberShelves", state.user.uid, "entries"));
-  return legacy.docs.map((entry) => ({ id: entry.id, ...entry.data() })).find((entry) => sameBook(entry, book)) || null;
+  return legacy.docs.map((entry) => ({ ...entry.data(), id: entry.id })).find((entry) => sameBook(entry, book)) || null;
 }
 async function saveCatalogShelfBook(book, status) {
   const existing = await existingShelfEntry(book); const key = `${existing?.id || "new"}:${status}`;
@@ -898,15 +910,17 @@ async function addMemory(event) {
 async function addInvite(event) { event.preventDefault(); if (!isOfficer()) return; const email = ui.inviteEmail.value.trim().toLowerCase(); if (!email) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Approving…", async () => { try { await setDoc(doc(db, "allowedEmails", email), { email, invitedAt: new Date().toISOString() }); ui.inviteForm.reset(); toast("That email can now create a member library."); } catch (error) { console.error(error); toast("Could not approve that email."); } }); }
 
 function renderBoard() {
-  ui.pinBoard.innerHTML = state.boardPosts.length ? recentFirst(state.boardPosts).map((post) => `<article class="pin-note"><span class="pin-avatar">${escapeHtml(initials(post.displayName))}</span><p>${escapeHtml(post.text)}</p><footer><span>${escapeHtml(post.displayName || "Club member")} · ${escapeHtml(dateTimeLabel(post.date))}</span>${isOfficer() ? `<button type="button" class="text-button" data-remove-pin="${post.id}">Remove</button>` : ""}</footer></article>`).join("") : '<p class="empty-state">Nothing pinned yet. The board is ready for its first note.</p>';
+  ui.pinBoard.innerHTML = state.boardPosts.length ? recentFirst(state.boardPosts).map((post) => `<article class="pin-note"><span class="pin-avatar">${escapeHtml(initials(post.displayName))}</span><p>${escapeHtml(post.text)}</p><footer><span>${escapeHtml(post.displayName || "Club member")} · ${escapeHtml(dateTimeLabel(post.date))}</span>${isOfficer() ? `<button type="button" class="text-button" data-remove-pin="${escapeHtml(post.id)}">Remove</button>` : ""}</footer></article>`).join("") : '<p class="empty-state">Nothing pinned yet. The board is ready for its first note.</p>';
 }
 async function postBoard(event) {
   event.preventDefault(); if (!isMember()) return;
   const text = ui.boardText.value.trim(); if (!text) return;
-  const button = event.currentTarget.querySelector("button[type=submit]");
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type=submit]");
   await runBusy(button, "Pinning…", async () => {
-    try { await addDoc(collection(db, "boardPosts"), { text, memberId: state.user.uid, displayName: state.profile.displayName || "Club member", photoURL: state.profile.photoURL || "", date: new Date().toISOString() }); event.currentTarget.reset(); ui.boardStatus.textContent = "Pinned for the club."; }
-    catch (error) { console.error(error); ui.boardStatus.textContent = "Could not pin that note."; }
+    let saved = false;
+    try { await addDoc(collection(db, "boardPosts"), { text, memberId: state.user.uid, displayName: state.profile.displayName || "Club member", photoURL: state.profile.photoURL || "", date: new Date().toISOString() }); saved = true; if (form.isConnected) form.reset(); ui.boardStatus.textContent = "Pinned for the club."; }
+    catch (error) { console.error(error); ui.boardStatus.textContent = saved ? "Your note was saved. Reopen the page to refresh the board." : "Could not pin that note."; }
   });
 }
 
@@ -915,7 +929,7 @@ function renderMembers() {
   ui.members.innerHTML = state.members.length ? state.members.map((member) => {
     const label = member.clubTitle || (member.role === "officer" ? "Officer" : "Member");
     const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 192))}" alt="Portrait of ${escapeHtml(member.displayName || "club member")}" loading="lazy" decoding="async" width="96" height="96">` : escapeHtml(initials(member.displayName));
-    return `<button type="button" class="member-card" data-member-id="${member.id}" style="--accent:${color(member.themeColor)}"><span class="member-avatar">${avatar}</span><span><strong>${escapeHtml(member.displayName || "Club member")}</strong><small>${escapeHtml(label)}</small></span></button>`;
+    return `<button type="button" class="member-card" data-member-id="${escapeHtml(member.id)}" style="--accent:${color(member.themeColor)}"><span class="member-avatar">${avatar}</span><span><strong>${escapeHtml(member.displayName || "Club member")}</strong><small>${escapeHtml(label)}</small></span></button>`;
   }).join("") : '<p class="empty-state">Member libraries will appear here.</p>';
 }
 async function openProfile(uid) {
@@ -931,7 +945,7 @@ async function openProfile(uid) {
     const snapshot = await getDoc(doc(db, "members", uid));
     if (!snapshot.exists()) throw new Error("That member library is unavailable.");
     const member = snapshot.data(), own = state.user?.uid === uid, accent = color(member.themeColor);
-    state.openProfileMember = { id: uid, ...member };
+    state.openProfileMember = { ...member, id: uid };
     ui.profileDialog.setAttribute("aria-label", `${member.displayName || "Club member"}’s member library`);
     const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 360))}" alt="Portrait of ${escapeHtml(member.displayName || "club member")}" decoding="async" width="180" height="180">` : escapeHtml(initials(member.displayName));
     const shelfForm = own && isMember() ? `<button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Add a book</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><button id="openCatalogFromShelf" type="button" class="text-button">Find a book automatically</button><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Page count <input id="shelfPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>A small note <textarea id="shelfNote" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
@@ -942,8 +956,8 @@ async function openProfile(uid) {
     $("openCatalogFromShelf")?.addEventListener("click", () => openCatalog("shelf"));
     $("shelfFormToggle")?.addEventListener("click", (event) => { const form = $("shelfForm"), open = form.hidden; form.hidden = !open; event.currentTarget.setAttribute("aria-expanded", String(open)); event.currentTarget.textContent = open ? "Hide add-book form" : "Add a book"; });
     state.stopShelf?.();
-    state.stopShelf = onSnapshot(collection(db, "memberShelves", uid, "entries"), (shelf) => renderShelf(shelf.docs.map((entry) => ({ id: entry.id, ...entry.data() }))), () => { $("personalBooks").innerHTML = '<p class="empty-state">This library is unavailable right now. Check your connection and try reopening it.</p>'; });
-    if (member.shareActivity === true) state.stopProfileActivity = onSnapshot(query(collection(db, "activities"), where("actorId", "==", uid), limit(30)), (activity) => { state.profileActivities = newestActivities(activity.docs.map((entry) => ({ id: entry.id, ...entry.data() }))).slice(0, 10); renderMemberActivity(); }, () => { const target = $("memberActivityList"); if (target) { target.removeAttribute("aria-busy"); target.innerHTML = '<p class="empty-state">Public activity is unavailable right now.</p>'; } });
+    state.stopShelf = onSnapshot(collection(db, "memberShelves", uid, "entries"), (shelf) => renderShelf(shelf.docs.map((entry) => ({ ...entry.data(), id: entry.id }))), () => { $("personalBooks").innerHTML = '<p class="empty-state">This library is unavailable right now. Check your connection and try reopening it.</p>'; });
+    if (member.shareActivity === true) state.stopProfileActivity = onSnapshot(query(collection(db, "activities"), where("actorId", "==", uid), limit(30)), (activity) => { state.profileActivities = newestActivities(activity.docs.map((entry) => ({ ...entry.data(), id: entry.id }))).slice(0, 10); renderMemberActivity(); }, () => { const target = $("memberActivityList"); if (target) { target.removeAttribute("aria-busy"); target.innerHTML = '<p class="empty-state">Public activity is unavailable right now.</p>'; } });
     else renderMemberActivity();
   } catch (error) {
     console.error(error);
@@ -991,7 +1005,7 @@ function legacyCommentId(comment, index) {
   return `legacy_${index}_${(hash >>> 0).toString(36)}`;
 }
 function normalizeLegacyComments(comments = []) {
-  return comments.map((comment, index) => {
+  return (Array.isArray(comments) ? comments : []).filter((comment) => comment && typeof comment === "object" && typeof comment.text === "string").map((comment, index) => {
     const id = legacyCommentId(comment, index);
     return { id, memberId: "", name: comment.name || "Club member", text: comment.text || "", createdAt: comment.date || "", parentId: "", rootId: id, spoiler: false, spoilerScope: "", legacy: true };
   });
@@ -1030,7 +1044,7 @@ function subscribeBookComments(bookId) {
   const target = $("bookCommentList"); target?.setAttribute("aria-busy", "true");
   state.stopBookComments = onSnapshot(query(collection(db, "books", bookId, "comments"), orderBy("createdAt", "desc"), limit(80)), (snapshot) => {
     if (state.activeBookId !== bookId) return;
-    state.bookComments = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data(), legacy: false })); renderBookComments();
+    state.bookComments = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id, legacy: false })); renderBookComments();
   }, (error) => {
     console.warn("Book discussion replies unavailable:", error); target?.removeAttribute("aria-busy");
     const status = $("bookCommentMessage"); if (status) status.textContent = "Older notes are still visible, but new discussion replies could not load.";
@@ -1065,7 +1079,7 @@ function subscribeBookReactions(bookId) {
   state.stopBookReactions?.(); state.stopBookReactions = null; state.reactionBookId = bookId; state.bookReactions = []; renderBookReactions();
   state.stopBookReactions = onSnapshot(query(collection(db, "books", bookId, "reactions"), limit(100)), (snapshot) => {
     if (state.reactionBookId !== bookId) return;
-    state.bookReactions = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBookReactions();
+    state.bookReactions = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderBookReactions();
   }, (error) => { console.warn("Book reactions unavailable:", error); const status = $("reactionStatus"); if (status) { status.dataset.keepMessage = "true"; status.textContent = "Reactions could not load, but the rest of the book details still work."; } });
 }
 async function toggleBookReaction(reaction) {
@@ -1108,7 +1122,7 @@ function renderShelf(entries) {
     favorites.innerHTML = favoriteEntries.length ? favoriteEntries.map((entry, index) => `<article class="favorite-book"><button type="button" class="favorite-book-open" data-shelf-book-id="${escapeHtml(entry.id)}"><span class="favorite-cover">${automaticCoverUrl(entry) ? coverImageMarkup(entry, 320) : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</span><span class="favorite-title">${escapeHtml(entry.title)}</span><span class="favorite-position">Favorite ${index + 1}</span></button></article>`).join("") : `<p class="empty-state">${own ? "No favorites pinned yet. Open one of your shelf books to add it to your Top 3." : "No favorite books shared yet."}</p>`;
   }
   shelf.removeAttribute("aria-busy");
-  shelf.innerHTML = entries.length ? recentFirst(entries).map((entry) => `<article class="personal-book"><button type="button" class="personal-cover-button" data-shelf-book-id="${entry.id}" aria-label="Open ${escapeHtml(entry.title)}">${automaticCoverUrl(entry) ? coverImageMarkup(entry, 480) : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</button><div><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.author)}</small><span class="status">${escapeHtml(String(entry.status || "reading").replace(/-/g, " "))}</span></div></article>`).join("") : '<p class="empty-state">This little library is waiting for its first book.</p>';
+  shelf.innerHTML = entries.length ? recentFirst(entries).map((entry) => `<article class="personal-book"><button type="button" class="personal-cover-button" data-shelf-book-id="${escapeHtml(entry.id)}" aria-label="Open ${escapeHtml(entry.title)}">${automaticCoverUrl(entry) ? coverImageMarkup(entry, 480) : `<span class="personal-fallback">${escapeHtml(entry.title)}</span>`}</button><div><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.author)}</small><span class="status">${escapeHtml(String(entry.status || "reading").replace(/-/g, " "))}</span></div></article>`).join("") : '<p class="empty-state">This little library is waiting for its first book.</p>';
 }
 
 async function toggleFavorite(entryId) {
@@ -1188,24 +1202,27 @@ async function postBookComment(event, bookId) {
   const spoiler = Boolean($("bookCommentSpoiler")?.checked), spoilerScope = spoiler ? ($("bookSpoilerScope")?.value.trim() || "").slice(0, 80) : "";
   const signature = `${bookId}|${parent?.id || "root"}|${text}|${spoiler}|${spoilerScope}`;
   if (state.lastCommentPost?.signature === signature && Date.now() - state.lastCommentPost.time < 8000) { $("bookCommentMessage").textContent = "That note was already posted a moment ago."; return; }
-  const button = event.currentTarget.querySelector("button[type=submit]");
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type=submit]");
   await runBusy(button, "Posting…", async () => {
+    let saved = false;
     try {
       const book = state.books.find((item) => item.id === bookId);
       if (!book) throw new Error("This book is no longer available.");
       const commentRef = doc(collection(db, "books", bookId, "comments"));
       const comment = { memberId: state.user.uid, name: state.profile.displayName || "Club member", text, createdAt: serverTimestamp(), parentId: parent?.id || "", rootId: parent ? (parent.rootId || parent.id) : commentRef.id, spoiler, spoilerScope };
       await setDoc(commentRef, comment);
+      saved = true;
       state.lastCommentPost = { signature, time: Date.now() };
       await recordActivity(parent ? "replied_to_comment" : "discussed_book", book, { publicBookId: bookId, key: commentRef.id });
       if (parent) await createReplyNotification(book, parent, commentRef.id);
-      if (state.activeBookId === bookId) {
-        event.currentTarget.reset(); clearReplyTarget(); updateSpoilerScopeVisibility();
+      if (state.activeBookId === bookId && $("bookCommentForm") === form) {
+        form.reset(); clearReplyTarget(); updateSpoilerScopeVisibility();
         $("bookCommentMessage").textContent = parent ? "Your reply is part of the conversation." : "Your note is part of the club discussion.";
       }
     } catch (error) {
       console.error(error);
-      if (state.activeBookId === bookId && $("bookCommentMessage")) $("bookCommentMessage").textContent = error.message === "This book is no longer available." ? error.message : "Could not post your note. Check your connection and try again.";
+      if (state.activeBookId === bookId && $("bookCommentForm") === form && $("bookCommentMessage")) $("bookCommentMessage").textContent = saved ? "Your note was saved. Reopen the discussion to refresh it." : error.message === "This book is no longer available." ? error.message : "Could not post your note. Check your connection and try again.";
     }
   });
 }
@@ -1266,8 +1283,10 @@ async function saveBookMetadata(event, bookId) {
 async function addShelfBook(event) {
   event.preventDefault();
   if (!isMember() || state.openProfileId !== state.user?.uid) return;
-  const button = event.currentTarget.querySelector("button[type=submit]");
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type=submit]");
   await runBusy(button, "Adding…", async () => {
+    let saved = false;
     try {
       const candidate = { title: $("shelfTitle").value.trim(), author: $("shelfAuthor").value.trim() };
       const existing = await existingShelfEntry(candidate);
@@ -1286,19 +1305,20 @@ async function addShelfBook(event) {
       }, $("shelfPages")?.value);
       if (status === "read") shelfBook.completedAt = serverTimestamp();
       const added = await addDoc(collection(db, "memberShelves", state.openProfileId, "entries"), shelfBook);
+      saved = true;
       await recordActivity(activityTypeForStatus(status), shelfBook, { shelfEntryId: added.id, key: `${added.id}_${status}` });
-      event.currentTarget.reset();
+      if (form.isConnected) form.reset();
       toast(shelfAddedMessage());
     } catch (error) {
       console.error(error);
-      toast(error.message || "Could not add that book.");
+      toast(saved ? "Your book was saved. Reopen your library to refresh it." : (error.message || "Could not add that book."));
     }
   });
 }
 
-onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBooks(); renderNotifications(); renderMemoryOptions(); renderMemories(); renderDashboard(); renderDiscovery(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
-onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMembers(); renderMonth(); renderNotifications(); renderDashboard(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
-onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); state.activityLoaded = true; renderActivityFeed(); renderDiscovery(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; renderDiscovery(); });
+onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderBooks(); renderNotifications(); renderMemoryOptions(); renderMemories(); renderDashboard(); renderDiscovery(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
+onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMembers(); renderMonth(); renderNotifications(); renderDashboard(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
+onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.activityLoaded = true; renderActivityFeed(); renderDiscovery(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; renderDiscovery(); });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { const pick = snapshot.data() || {}; state.currentPickId = pick.bookId || null; state.monthAccent = /^#[0-9a-f]{6}$/i.test(pick.highlightColor || "") ? pick.highlightColor : "#d8e66f"; if ($("monthAccent")) $("monthAccent").value = state.monthAccent; renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { toast("Book of the Month could not load."); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement yet—check back after the next library meeting."; if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
 onSnapshot(doc(db, "siteSettings", "readingGoal"), (snapshot) => { state.readingGoal = snapshot.exists() ? snapshot.data() : null; syncGoalProgressSubscription(); renderReadingGoal(); }, (error) => { console.warn("Reading goal unavailable:", error); ui.readingGoalTotal.textContent = "Reading goal unavailable"; ui.readingGoalContent.innerHTML = '<p class="empty-state">The shared goal could not load. The rest of the site is still available.</p>'; });
@@ -1313,9 +1333,9 @@ onSnapshot(doc(db, "siteSettings", "catalog"), (snapshot) => {
     ui.uploadPreset.value = state.uploadPreset;
   }
 }, (error) => console.warn("Catalogue settings unavailable:", error));
-onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMemoryOptions(); renderMemories(); renderNotifications(); }, () => { ui.events.innerHTML = '<p class="empty-state">Events are unavailable right now.</p>'; });
-onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderMemories(); }, () => { ui.memories.innerHTML = '<p class="empty-state">Reading memories are unavailable right now.</p>'; });
-onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
+onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMemoryOptions(); renderMemories(); renderNotifications(); }, () => { ui.events.innerHTML = '<p class="empty-state">Events are unavailable right now.</p>'; });
+onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMemories(); }, () => { ui.memories.innerHTML = '<p class="empty-state">Reading memories are unavailable right now.</p>'; });
+onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
 
 ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid)); ui.dashboardOpenLibrary.addEventListener("click", () => openProfile(state.user.uid));
 ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });

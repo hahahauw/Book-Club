@@ -1101,8 +1101,8 @@
 
       bookshelf.innerHTML = books.map((book, index) => `
         <div class="book-card">
-          ${book.coverUrl ?
-            `<img class="book-card-cover" src="${escapeHtml(book.coverUrl)}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;book-card-cover-placeholder&quot;>${escapeHtml(book.title)}</div>'">` :
+          ${safeImageUrl(book.coverUrl) ?
+            `<img class="book-card-cover" src="${escapeHtml(safeImageUrl(book.coverUrl))}" alt="Cover of ${escapeHtml(book.title)}" loading="lazy">` :
             `<div class="book-card-cover-placeholder">${escapeHtml(book.title)}</div>`
           }
           <div class="book-card-body">
@@ -1146,10 +1146,18 @@
       `).join('');
     }
 
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text || '';
-      return div.innerHTML;
+    // For HTML text and quoted attributes only; never interpolate into executable code.
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      })[character]);
+    }
+    function safeImageUrl(value) {
+      try {
+        const url = new URL(String(value || ""));
+        if (url.protocol === "http:") url.protocol = "https:";
+        return url.protocol === "https:" && !url.username && !url.password ? url.href : "";
+      } catch { return ""; }
     }
 
     // ====== COMMENTS ======
@@ -1224,6 +1232,16 @@
 
       document.querySelector('.bookshelf').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
+
+    // No user content is embedded in an inline JavaScript error handler.
+    bookshelf.addEventListener('error', (event) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement)) return;
+      const fallback = document.createElement('div');
+      fallback.className = 'book-card-cover-placeholder';
+      fallback.textContent = image.alt.replace(/^Cover of /, '');
+      image.replaceWith(fallback);
+    }, true);
 
     // ====== INIT ======
     renderBooks();

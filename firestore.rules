@@ -1,0 +1,452 @@
+rules_version = '2';
+
+// Book Enthusiasts Club — Firestore Security Rules
+// Baseline supplied by the owner on September 10, 2026; see SECURITY_REVIEW.md.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
+    function memberPath(uid) { return /databases/$(database)/documents/members/$(uid); }
+    function bookCommentPath(bookId, commentId) {
+      return /databases/$(database)/documents/books/$(bookId)/comments/$(commentId);
+    }
+    function eventPath(eventId) { return /databases/$(database)/documents/events/$(eventId); }
+    function eventRsvpPath(uid, eventId) {
+      return /databases/$(database)/documents/members/$(uid)/eventRsvps/$(eventId);
+    }
+    function isMember() {
+      return signedIn() && exists(memberPath(request.auth.uid))
+        && get(memberPath(request.auth.uid)).data.role in ['member', 'officer'];
+    }
+    function isOfficer() {
+      return signedIn() && exists(memberPath(request.auth.uid))
+        && get(memberPath(request.auth.uid)).data.role == 'officer';
+    }
+    function isAllowedEmail() {
+      let email = request.auth.token.email;
+      return signedIn() && exists(/databases/$(database)/documents/allowedEmails/$(email));
+    }
+    function validFavoriteBookIds(data) {
+      let ids = data.get('favoriteBookIds', []);
+      return ids is list && ids.size() <= 3
+        && (ids.size() < 1 || (ids[0] is string && ids[0].size() > 0 && ids[0].size() <= 128))
+        && (ids.size() < 2 || (ids[1] is string && ids[1].size() > 0 && ids[1].size() <= 128))
+        && (ids.size() < 3 || (ids[2] is string && ids[2].size() > 0 && ids[2].size() <= 128));
+    }
+    function validProfile(data) {
+      return data.keys().hasOnly(['displayName', 'photoURL', 'joinedAt', 'role', 'bio', 'themeColor', 'clubTitle', 'favoriteGenre', 'currentlyReading', 'favoriteBookIds', 'shareActivity', 'showReadingStats'])
+        && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 60
+        && data.photoURL is string && data.photoURL.size() <= 500
+        && data.joinedAt is string
+        && data.role in ['member', 'officer']
+        && data.bio is string && data.bio.size() <= 80
+        && data.themeColor is string && data.themeColor.size() <= 20
+        && (!data.keys().hasAll(['clubTitle']) || (data.clubTitle is string && data.clubTitle.size() <= 30 && (data.clubTitle == '' || data.role == 'officer')))
+        && (!data.keys().hasAll(['favoriteGenre']) || (data.favoriteGenre is string && data.favoriteGenre.size() <= 40))
+        && (!data.keys().hasAll(['currentlyReading']) || (data.currentlyReading is string && data.currentlyReading.size() <= 100))
+        && validFavoriteBookIds(data)
+        && data.get('shareActivity', false) is bool
+        && data.get('showReadingStats', false) is bool;
+    }
+    function validActivity(data) {
+      return data.keys().hasOnly(['actorId', 'type', 'bookTitle', 'bookAuthor', 'coverUrl', 'catalogKey', 'publicBookId', 'shelfEntryId', 'stars', 'createdAt'])
+        && data.keys().hasAll(['actorId', 'type', 'bookTitle', 'bookAuthor', 'coverUrl', 'catalogKey', 'publicBookId', 'shelfEntryId', 'createdAt'])
+        && data.actorId == request.auth.uid
+        && data.type in ['started_reading', 'finished_book', 'want_to_read', 'rated_book', 'discussed_book', 'replied_to_comment', 'recommended_book']
+        && data.bookTitle is string && data.bookTitle.size() > 0 && data.bookTitle.size() <= 160
+        && data.bookAuthor is string && data.bookAuthor.size() > 0 && data.bookAuthor.size() <= 100
+        && data.coverUrl is string && data.coverUrl.size() <= 500
+        && data.catalogKey is string && data.catalogKey.size() <= 200
+        && data.publicBookId is string && data.publicBookId.size() <= 128
+        && data.shelfEntryId is string && data.shelfEntryId.size() <= 128
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 40
+        && (data.type != 'rated_book' || (data.keys().hasAll(['stars']) && data.stars is int && data.stars >= 1 && data.stars <= 5))
+        && (!data.keys().hasAll(['stars']) || (data.stars is int && data.stars >= 1 && data.stars <= 5));
+    }
+    function validOfficerBookEdit() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isOfficer()
+        && changed.hasOnly(['title', 'author', 'genre', 'coverUrl', 'synopsis', 'pageCount'])
+        && (!changed.hasAny(['title']) || (request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 160))
+        && (!changed.hasAny(['author']) || (request.resource.data.author is string && request.resource.data.author.size() > 0 && request.resource.data.author.size() <= 100))
+        && (!changed.hasAny(['genre']) || (request.resource.data.genre is string && request.resource.data.genre.size() <= 80))
+        && (!changed.hasAny(['coverUrl']) || (request.resource.data.coverUrl is string && request.resource.data.coverUrl.size() <= 500))
+        && (!changed.hasAny(['synopsis']) || (request.resource.data.synopsis is string && request.resource.data.synopsis.size() <= 3000))
+        && (!changed.hasAny(['pageCount']) || (request.resource.data.pageCount is int && request.resource.data.pageCount >= 1 && request.resource.data.pageCount <= 10000));
+    }
+    function validComment(comment) {
+      return comment is map && comment.keys().hasOnly(['name', 'text', 'date'])
+        && comment.name is string && comment.name.size() > 0 && comment.name.size() <= 60
+        && comment.text is string && comment.text.size() > 0 && comment.text.size() <= 500
+        && comment.date is string;
+    }
+    // Legacy arrays are read-only to members. Officers may append one reviewed
+    // guest note, preserving every previous element in its original position.
+    function validCommentAppend() {
+      let comments = request.resource.data.get('comments', []);
+      let previous = resource.data.get('comments', []);
+      return isOfficer() && comments is list && previous is list && comments.size() <= 200
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments'])
+        && comments.size() == previous.size() + 1
+        && validComment(comments[comments.size() - 1])
+        && comments == previous.concat([comments[comments.size() - 1]]);
+    }
+    function validThreadedComment(bookId, commentId, data) {
+      return data.keys().hasOnly(['memberId', 'name', 'text', 'createdAt', 'parentId', 'rootId', 'spoiler', 'spoilerScope'])
+        && data.keys().hasAll(['memberId', 'name', 'text', 'createdAt', 'parentId', 'rootId', 'spoiler', 'spoilerScope'])
+        && data.memberId == request.auth.uid
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 60
+        && data.name == get(memberPath(request.auth.uid)).data.displayName
+        && data.text is string && data.text.size() > 0 && data.text.size() <= 500
+        && data.createdAt is timestamp && data.createdAt == request.time
+        && data.parentId is string && data.parentId.size() <= 128
+        && data.rootId is string && data.rootId.size() > 0 && data.rootId.size() <= 128
+        && data.spoiler is bool
+        && data.spoilerScope is string && data.spoilerScope.size() <= 80
+        && (data.spoiler == true || data.spoilerScope == '')
+        && ((data.parentId == '' && data.rootId == commentId)
+          || (data.parentId.size() > 0
+            && exists(bookCommentPath(bookId, data.parentId))
+            && exists(bookCommentPath(bookId, data.rootId))
+            && ((get(bookCommentPath(bookId, data.parentId)).data.parentId == '' && data.rootId == data.parentId)
+              || (get(bookCommentPath(bookId, data.parentId)).data.parentId.size() > 0
+                && data.rootId == get(bookCommentPath(bookId, data.parentId)).data.rootId))));
+    }
+    function validReaction(uid, data) {
+      return data.keys().hasOnly(['memberId', 'reaction', 'updatedAt'])
+        && data.keys().hasAll(['memberId', 'reaction', 'updatedAt'])
+        && data.memberId == uid
+        && data.reaction in ['emotional', 'slow_burn', 'mind_blown', 'comfort_read', 'funny', 'devastating', 'thought_provoking', 'great_romance', 'great_worldbuilding', 'beautiful_writing']
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+    function validNewNotification(data) {
+      return data.keys().hasOnly(['type', 'actorId', 'bookId', 'discussionId', 'replyId', 'eventId', 'createdAt', 'read', 'readAt'])
+        && data.keys().hasAll(['type', 'actorId', 'bookId', 'discussionId', 'replyId', 'eventId', 'createdAt', 'read', 'readAt'])
+        && data.type in ['discussion_reply', 'book_of_month_changed', 'announcement_updated', 'event_added']
+        && data.actorId is string && data.actorId == request.auth.uid
+        && data.bookId is string && data.bookId.size() <= 128
+        && data.discussionId is string && data.discussionId.size() <= 128
+        && data.replyId is string && data.replyId.size() <= 128
+        && data.eventId is string && data.eventId.size() <= 128
+        && data.createdAt is timestamp && data.createdAt == request.time
+        && data.read is bool && data.read == false && data.readAt == null;
+    }
+    function validClubNotification(notificationId, data) {
+      return isOfficer() && data.type in ['book_of_month_changed', 'announcement_updated', 'event_added']
+        && ((data.type == 'book_of_month_changed'
+            && notificationId == 'book_of_month' && data.bookId.size() > 0
+            && exists(/databases/$(database)/documents/books/$(data.bookId))
+            && data.discussionId == '' && data.replyId == '' && data.eventId == '')
+          || (data.type == 'announcement_updated' && notificationId == 'announcement'
+            && data.bookId == '' && data.discussionId == '' && data.replyId == '' && data.eventId == '')
+          || (data.type == 'event_added' && notificationId == 'event_' + data.eventId
+            && data.bookId == '' && data.discussionId == '' && data.replyId == ''
+            && data.eventId.size() > 0 && exists(/databases/$(database)/documents/events/$(data.eventId))));
+    }
+    function validReplyNotification(recipientUid, notificationId, data) {
+      return isMember() && data.type == 'discussion_reply'
+        && notificationId == 'reply_' + data.replyId
+        && data.bookId.size() > 0 && data.discussionId.size() > 0
+        && data.replyId.size() > 0 && data.eventId == ''
+        && exists(bookCommentPath(data.bookId, data.replyId))
+        && exists(bookCommentPath(data.bookId, data.discussionId))
+        && get(bookCommentPath(data.bookId, data.replyId)).data.memberId == request.auth.uid
+        && get(bookCommentPath(data.bookId, data.replyId)).data.parentId == data.discussionId
+        && get(bookCommentPath(data.bookId, data.discussionId)).data.memberId == recipientUid;
+    }
+    function validReadingGoal(data) {
+      return data.keys().hasOnly(['title', 'target', 'metric', 'startAt', 'endDate', 'active', 'finalProgress', 'updatedAt'])
+        && data.keys().hasAll(['title', 'target', 'metric', 'startAt', 'endDate', 'active', 'finalProgress', 'updatedAt'])
+        && data.title is string && data.title.size() <= 100
+        && data.target is int && data.target >= 1 && data.target <= 1000
+        && data.metric == 'books' && data.startAt is timestamp
+        && data.endDate is string
+        && (data.endDate == '' || data.endDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && data.active is bool && data.finalProgress is int && data.finalProgress >= 0
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+    function validEventCounts(data) {
+      return data.keys().hasAll(['rsvpGoing', 'rsvpMaybe', 'rsvpCantAttend'])
+        && data.rsvpGoing is int && data.rsvpGoing >= 0
+        && data.rsvpMaybe is int && data.rsvpMaybe >= 0
+        && data.rsvpCantAttend is int && data.rsvpCantAttend >= 0;
+    }
+    function validOptionalEventCounts(data) {
+      return !data.keys().hasAny(['rsvpGoing', 'rsvpMaybe', 'rsvpCantAttend']) || validEventCounts(data);
+    }
+    function validEventRsvp(uid, eventId, data) {
+      return data.keys().hasOnly(['memberId', 'eventId', 'status', 'updatedAt'])
+        && data.keys().hasAll(['memberId', 'eventId', 'status', 'updatedAt'])
+        && data.memberId == uid && data.eventId == eventId
+        && data.status in ['going', 'maybe', 'cant_attend']
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+    function rsvpWeight(status, expected) { return status == expected ? 1 : 0; }
+    function validRsvpAggregateTransition(eventId, previousStatus, nextStatus) {
+      let before = get(eventPath(eventId)).data;
+      let after = getAfter(eventPath(eventId)).data;
+      return exists(eventPath(eventId))
+        && previousStatus in ['', 'going', 'maybe', 'cant_attend']
+        && nextStatus in ['going', 'maybe', 'cant_attend'] && validEventCounts(after)
+        && before.get('rsvpGoing', 0) is int && before.get('rsvpGoing', 0) >= 0
+        && before.get('rsvpMaybe', 0) is int && before.get('rsvpMaybe', 0) >= 0
+        && before.get('rsvpCantAttend', 0) is int && before.get('rsvpCantAttend', 0) >= 0
+        && after.diff(before).affectedKeys().hasOnly(['rsvpGoing', 'rsvpMaybe', 'rsvpCantAttend'])
+        && after.rsvpGoing == before.get('rsvpGoing', 0) - rsvpWeight(previousStatus, 'going') + rsvpWeight(nextStatus, 'going')
+        && after.rsvpMaybe == before.get('rsvpMaybe', 0) - rsvpWeight(previousStatus, 'maybe') + rsvpWeight(nextStatus, 'maybe')
+        && after.rsvpCantAttend == before.get('rsvpCantAttend', 0) - rsvpWeight(previousStatus, 'cant_attend') + rsvpWeight(nextStatus, 'cant_attend');
+    }
+    function validMemberRsvpAggregateUpdate(eventId) {
+      let rsvpDocPath = eventRsvpPath(request.auth.uid, eventId);
+      return isMember() && existsAfter(rsvpDocPath)
+        && validEventRsvp(request.auth.uid, eventId, getAfter(rsvpDocPath).data)
+        && ((!exists(rsvpDocPath) && validRsvpAggregateTransition(eventId, '', getAfter(rsvpDocPath).data.status))
+          || (exists(rsvpDocPath) && get(rsvpDocPath).data.status in ['going', 'maybe', 'cant_attend']
+            && validRsvpAggregateTransition(eventId, get(rsvpDocPath).data.status, getAfter(rsvpDocPath).data.status)));
+    }
+    function validMemoryAssociations(data) {
+      return (!data.keys().hasAll(['eventId']) || (data.eventId is string && data.eventId.size() <= 128))
+        && (!data.keys().hasAll(['bookId']) || (data.bookId is string && data.bookId.size() <= 128))
+        && (!data.keys().hasAll(['eventTitleSnapshot']) || (data.eventTitleSnapshot is string && data.eventTitleSnapshot.size() <= 100))
+        && (!data.keys().hasAll(['eventDateSnapshot']) || (data.eventDateSnapshot is string && data.eventDateSnapshot.size() <= 40))
+        && (!data.keys().hasAll(['bookTitleSnapshot']) || (data.bookTitleSnapshot is string && data.bookTitleSnapshot.size() <= 160))
+        && (!data.keys().hasAll(['bookAuthorSnapshot']) || (data.bookAuthorSnapshot is string && data.bookAuthorSnapshot.size() <= 100))
+        && (!data.keys().hasAll(['updatedAt']) || (data.updatedAt is timestamp && data.updatedAt == request.time));
+    }
+    function validNewMemoryAssociationTargets(data) {
+      return (!data.keys().hasAll(['eventId']) || data.eventId == '' || exists(eventPath(data.eventId)))
+        && (!data.keys().hasAll(['bookId']) || data.bookId == '' || exists(/databases/$(database)/documents/books/$(data.bookId)));
+    }
+    function validUpdatedMemoryAssociationTargets(data) {
+      return (!data.keys().hasAll(['eventId']) || data.eventId == '' || data.eventId == resource.data.get('eventId', '') || exists(eventPath(data.eventId)))
+        && (!data.keys().hasAll(['bookId']) || data.bookId == '' || data.bookId == resource.data.get('bookId', '') || exists(/databases/$(database)/documents/books/$(data.bookId)));
+    }
+    function validPublicBook(data) {
+      return data.keys().hasOnly(['name', 'title', 'author', 'genre', 'coverUrl', 'why', 'synopsis', 'pageCount', 'date', 'comments', 'memberId', 'memberName', 'catalogKey', 'catalogId', 'openLibraryKey', 'googleBooksId', 'isbn', 'publicationYear', 'source'])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 160
+        && data.author is string && data.author.size() > 0 && data.author.size() <= 100
+        && data.genre is string && data.genre.size() <= 80
+        && data.coverUrl is string && data.coverUrl.size() <= 500
+        && data.why is string && data.why.size() <= 800
+        && data.get('synopsis', '') is string && data.get('synopsis', '').size() <= 3000
+        && (!data.keys().hasAll(['pageCount']) || (data.pageCount is int && data.pageCount >= 1 && data.pageCount <= 10000))
+        && data.date is string && data.comments is list && data.comments.size() == 0
+        && data.memberName is string && data.memberName.size() > 0 && data.memberName.size() <= 60
+        && data.get('name', '') is string && data.get('name', '').size() <= 60
+        && data.get('catalogKey', '') is string && data.get('catalogKey', '').size() <= 200
+        && data.get('catalogId', '') is string && data.get('catalogId', '').size() <= 200
+        && data.get('openLibraryKey', '') is string && data.get('openLibraryKey', '').size() <= 200
+        && data.get('googleBooksId', '') is string && data.get('googleBooksId', '').size() <= 200
+        && data.get('isbn', '') is string && data.get('isbn', '').size() <= 20
+        && (data.get('publicationYear', '') is string || data.get('publicationYear', '') is int)
+        && data.get('source', '') is string && data.get('source', '').size() <= 100
+        && ((data.keys().hasAll(['memberId']) && data.memberId == request.auth.uid)
+          || (!data.keys().hasAll(['memberId']) && isOfficer()));
+    }
+    // Every field written by the current manual/catalogue shelf flows is listed.
+    // Historical entries with additional fields require review before rollout.
+    function validShelfEntry(data) {
+      return data.keys().hasOnly(['title', 'author', 'genre', 'coverUrl', 'status', 'note', 'date', 'completedAt', 'synopsis', 'pageCount', 'catalogKey', 'catalogId', 'openLibraryKey', 'googleBooksId', 'isbn', 'publicationYear', 'source'])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 160
+        && data.author is string && data.author.size() > 0 && data.author.size() <= 100
+        && data.coverUrl is string && data.coverUrl.size() <= 500
+        && data.status in ['reading', 'read', 'want-to-read']
+        && data.note is string && data.note.size() <= 280 && data.date is string
+        && (!data.keys().hasAll(['completedAt']) || data.completedAt is timestamp)
+        && data.get('genre', '') is string && data.get('genre', '').size() <= 80
+        && data.get('synopsis', '') is string && data.get('synopsis', '').size() <= 3000
+        && (!data.keys().hasAll(['pageCount']) || (data.pageCount is int && data.pageCount >= 1 && data.pageCount <= 10000))
+        && data.get('catalogKey', '') is string && data.get('catalogKey', '').size() <= 200
+        && data.get('catalogId', '') is string && data.get('catalogId', '').size() <= 200
+        && data.get('openLibraryKey', '') is string && data.get('openLibraryKey', '').size() <= 200
+        && data.get('googleBooksId', '') is string && data.get('googleBooksId', '').size() <= 200
+        && data.get('isbn', '') is string && data.get('isbn', '').size() <= 20
+        && ((data.get('publicationYear', '') is string && data.get('publicationYear', '').size() <= 20)
+          || data.get('publicationYear', '') is int)
+        && data.get('source', '') is string && data.get('source', '').size() <= 100;
+    }
+
+    match /allowedEmails/{email} {
+      allow read, create, update, delete: if isOfficer();
+    }
+    match /members/{uid} {
+      allow read: if true;
+      allow create: if own(uid) && isAllowedEmail() && validProfile(request.resource.data)
+        && request.resource.data.role == 'member';
+      allow update: if validProfile(request.resource.data) && (
+        isOfficer() || (own(uid) && (
+          (!resource.data.keys().hasAll(['role']) && request.resource.data.role == 'member')
+          || (resource.data.keys().hasAll(['role']) && request.resource.data.role == resource.data.role
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['clubTitle'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'themeColor', 'clubTitle', 'favoriteGenre', 'currentlyReading', 'favoriteBookIds', 'shareActivity', 'showReadingStats'])))));
+      allow delete: if false;
+    }
+    match /memberPrivate/{uid} {
+      allow read: if isOfficer() || own(uid);
+      allow create: if own(uid) && isAllowedEmail()
+        && request.resource.data.keys().hasOnly(['email'])
+        && request.resource.data.email == request.auth.token.email;
+      allow update, delete: if isOfficer();
+    }
+    // Shelves remain public; only the owner may write.
+    match /memberShelves/{uid}/entries/{entryId} {
+      allow read: if true;
+      allow create, update: if own(uid) && isMember() && validShelfEntry(request.resource.data);
+      allow delete: if own(uid) && isMember();
+    }
+    // Existing public collection-group lookup; unchanged by this repair batch.
+    match /{path=**}/entries/{entryId} { allow read: if true; }
+    match /books/{bookId} {
+      allow read: if true;
+      allow create: if isMember() && validPublicBook(request.resource.data);
+      allow update: if validOfficerBookEdit() || validCommentAppend();
+      allow delete: if isOfficer();
+    }
+    match /books/{bookId}/comments/{commentId} {
+      allow read: if true;
+      allow create: if isMember() && exists(/databases/$(database)/documents/books/$(bookId))
+        && validThreadedComment(bookId, commentId, request.resource.data);
+      allow update, delete: if false;
+    }
+    match /books/{bookId}/reactions/{uid} {
+      allow read: if true;
+      allow create, update: if own(uid) && isMember()
+        && exists(/databases/$(database)/documents/books/$(bookId))
+        && validReaction(uid, request.resource.data);
+      allow delete: if (own(uid) && isMember()) || isOfficer();
+    }
+    match /books/{bookId}/recommendations/{uid} {
+      allow read: if true;
+      allow create, update: if own(uid) && isMember()
+        && request.resource.data.keys().hasOnly(['memberId', 'displayName', 'reason', 'createdAt', 'updatedAt'])
+        && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 60
+        && request.resource.data.reason is string && request.resource.data.reason.size() <= 800
+        && request.resource.data.createdAt is string && request.resource.data.updatedAt is string;
+      allow delete: if own(uid) || isOfficer();
+    }
+    match /bookOfMonthRatings/{bookId}/members/{uid} {
+      allow read: if true;
+      allow create, update: if own(uid) && isMember()
+        && get(/databases/$(database)/documents/siteSettings/currentPick).data.bookId == bookId
+        && request.resource.data.keys().hasOnly(['memberId', 'displayName', 'stars', 'finished', 'comment', 'updatedAt'])
+        && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 60
+        && request.resource.data.stars is int && request.resource.data.stars >= 1 && request.resource.data.stars <= 5
+        && request.resource.data.finished is bool
+        && request.resource.data.comment is string && request.resource.data.comment.size() <= 280
+        && request.resource.data.updatedAt is string;
+      allow delete: if own(uid) || isOfficer();
+    }
+    match /activities/{activityId} {
+      allow read: if true;
+      allow create: if isMember() && get(memberPath(request.auth.uid)).data.get('shareActivity', false) == true
+        && validActivity(request.resource.data);
+      allow update: if isMember() && resource.data.actorId == request.auth.uid
+        && get(memberPath(request.auth.uid)).data.get('shareActivity', false) == true
+        && validActivity(request.resource.data);
+      allow delete: if (signedIn() && resource.data.actorId == request.auth.uid) || isOfficer();
+    }
+    match /members/{recipientUid}/notifications/{notificationId} {
+      allow read: if own(recipientUid);
+      allow create: if exists(memberPath(recipientUid)) && validNewNotification(request.resource.data)
+        && (validClubNotification(notificationId, request.resource.data)
+          || validReplyNotification(recipientUid, notificationId, request.resource.data));
+      allow update: if (isOfficer() && validNewNotification(request.resource.data)
+          && validClubNotification(notificationId, request.resource.data))
+        || (own(recipientUid)
+          && request.resource.data.keys().hasOnly(['type', 'actorId', 'bookId', 'discussionId', 'replyId', 'eventId', 'createdAt', 'read', 'readAt'])
+          && request.resource.data.keys().hasAll(['type', 'actorId', 'bookId', 'discussionId', 'replyId', 'eventId', 'createdAt', 'read', 'readAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt'])
+          && resource.data.read == false && request.resource.data.read == true
+          && request.resource.data.readAt is timestamp && request.resource.data.readAt == request.time);
+      allow delete: if own(recipientUid) || isOfficer();
+    }
+    match /members/{uid}/eventRsvps/{eventId} {
+      allow read: if own(uid);
+      allow create: if own(uid) && isMember() && validEventRsvp(uid, eventId, request.resource.data)
+        && validRsvpAggregateTransition(eventId, '', request.resource.data.status);
+      allow update: if own(uid) && isMember()
+        && resource.data.memberId == uid && resource.data.eventId == eventId
+        && resource.data.status in ['going', 'maybe', 'cant_attend']
+        && validEventRsvp(uid, eventId, request.resource.data)
+        && validRsvpAggregateTransition(eventId, resource.data.status, request.resource.data.status);
+      allow delete: if false;
+    }
+    match /pendingBooks/{bookId} {
+      allow create: if request.resource.data.keys().hasOnly(['name', 'title', 'author', 'genre', 'coverUrl', 'why', 'synopsis', 'pageCount', 'catalogKey', 'catalogId', 'openLibraryKey', 'googleBooksId', 'isbn', 'publicationYear', 'source', 'date', 'comments', 'submittedAt', 'status'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 160
+        && request.resource.data.author is string && request.resource.data.author.size() > 0 && request.resource.data.author.size() <= 100
+        && request.resource.data.genre is string && request.resource.data.genre.size() <= 80
+        && request.resource.data.coverUrl is string && request.resource.data.coverUrl.size() <= 500
+        && request.resource.data.why is string && request.resource.data.why.size() <= 800
+        && request.resource.data.get('synopsis', '') is string && request.resource.data.get('synopsis', '').size() <= 4000
+        && (!request.resource.data.keys().hasAll(['pageCount']) || (request.resource.data.pageCount is int && request.resource.data.pageCount >= 1 && request.resource.data.pageCount <= 10000))
+        && request.resource.data.get('catalogKey', '') is string && request.resource.data.get('catalogKey', '').size() <= 200
+        && request.resource.data.get('catalogId', '') is string && request.resource.data.get('catalogId', '').size() <= 200
+        && request.resource.data.get('openLibraryKey', '') is string && request.resource.data.get('openLibraryKey', '').size() <= 200
+        && request.resource.data.get('googleBooksId', '') is string && request.resource.data.get('googleBooksId', '').size() <= 200
+        && request.resource.data.get('isbn', '') is string && request.resource.data.get('isbn', '').size() <= 20
+        && request.resource.data.get('publicationYear', '') is string && request.resource.data.get('publicationYear', '').size() <= 20
+        && request.resource.data.get('source', '') is string && request.resource.data.get('source', '').size() <= 80
+        && request.resource.data.date is string
+        && request.resource.data.comments is list && request.resource.data.comments.size() == 0
+        && request.resource.data.submittedAt is string && request.resource.data.status == 'pending';
+      allow read, update, delete: if isOfficer();
+    }
+    match /boardPosts/{postId} {
+      allow read: if true;
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['text', 'memberId', 'displayName', 'photoURL', 'date'])
+        && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 280
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 60
+        && request.resource.data.photoURL is string && request.resource.data.photoURL.size() <= 500
+        && request.resource.data.date is string;
+      allow update: if false;
+      allow delete: if isOfficer();
+    }
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isOfficer()
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+        && request.resource.data.date is string
+        && request.resource.data.details is string && request.resource.data.details.size() <= 180
+        && validEventCounts(request.resource.data)
+        && request.resource.data.rsvpGoing == 0 && request.resource.data.rsvpMaybe == 0 && request.resource.data.rsvpCantAttend == 0;
+      allow update: if (isOfficer()
+          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+          && request.resource.data.date is string
+          && request.resource.data.details is string && request.resource.data.details.size() <= 180
+          && validOptionalEventCounts(request.resource.data)) || validMemberRsvpAggregateUpdate(eventId);
+      allow delete: if isOfficer();
+    }
+    match /memories/{memoryId} {
+      allow read: if true;
+      allow create: if isOfficer()
+        && request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() > 0 && request.resource.data.imageUrl.size() <= 500
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+        && request.resource.data.category is string && request.resource.data.category.size() <= 50
+        && request.resource.data.date is string
+        && validMemoryAssociations(request.resource.data) && validNewMemoryAssociationTargets(request.resource.data);
+      allow update: if isOfficer()
+        && request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() > 0 && request.resource.data.imageUrl.size() <= 500
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+        && request.resource.data.category is string && request.resource.data.category.size() <= 50
+        && request.resource.data.date is string
+        && validMemoryAssociations(request.resource.data) && validUpdatedMemoryAssociationTargets(request.resource.data);
+      allow delete: if isOfficer();
+    }
+    match /siteSettings/readingGoal {
+      allow read: if true;
+      allow create, update: if isOfficer() && validReadingGoal(request.resource.data);
+      allow delete: if false;
+    }
+    match /siteSettings/{settingId} {
+      allow read: if true;
+      allow create, update, delete: if settingId != 'readingGoal' && isOfficer();
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
