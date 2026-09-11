@@ -47,7 +47,7 @@
       </div>
       <div id="monthCommunity" class="month-community" hidden>
         <div class="month-summary"><span id="monthRating">No ratings yet</span><span id="monthProgress">0% finished</span></div>
-        <details class="month-updates"><summary>Reader updates &amp; ratings</summary><form id="monthForm" class="compact-form"><label>Your rating <select id="monthStars"><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Not for me</option><option value="1">★☆☆☆☆ — Finished it</option></select></label><label class="checkbox-line"><input id="monthFinished" type="checkbox"> I finished this book</label><label>Discussion note <textarea id="monthComment" maxlength="280" placeholder="A thought, a favourite part, a question…"></textarea></label><button class="button" type="submit">Save my update</button></form>
+        <details class="month-updates"><summary>Reader updates &amp; ratings</summary><form id="monthForm" class="compact-form"><label>Your rating <select id="monthStars" required><option value="" disabled selected>Choose a rating</option><option value="5">★★★★★ — Loved it</option><option value="4">★★★★☆ — Really liked it</option><option value="3">★★★☆☆ — It was good</option><option value="2">★★☆☆☆ — Didn’t enjoy it much</option><option value="1">★☆☆☆☆ — Didn’t enjoy it</option></select></label><label class="checkbox-line"><input id="monthFinished" type="checkbox"> I finished this book</label><label>Discussion note <textarea id="monthComment" maxlength="280" placeholder="A thought, a favourite part, a question…"></textarea></label><button class="button" type="submit">Save my update</button></form>
         <p id="monthMessage" class="form-message"></p><div id="monthNotes" class="month-notes"></div></details>
       </div>
       <div id="monthOfficer" class="officer-panel" hidden><label>Choose the Book of the Month <select id="monthPicker"></select></label><button id="saveMonthButton" class="button" type="button">Set selected book</button></div>
@@ -116,6 +116,6 @@
   <dialog id="notificationDialog" class="dialog" aria-labelledby="notificationDialogTitle"><article class="dialog-card notification-dialog-card"><button class="close-dialog" type="button" data-close="notificationDialog" aria-label="Close">×</button><div class="notification-header"><div><p class="eyebrow">YOUR CLUB UPDATES</p><h2 id="notificationDialogTitle">Notifications</h2></div><button id="markNotificationsRead" type="button" class="text-button">Mark all as read</button></div><p class="catalog-intro">Direct replies and important club updates appear here—nothing noisy.</p><div id="notificationList" class="notification-list" aria-busy="true"><span class="skeleton skeleton-activity" aria-hidden="true"></span><span class="skeleton skeleton-activity" aria-hidden="true"></span></div><p id="notificationStatus" class="form-message" aria-live="polite"></p></article></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" popover="manual"></div>
-  <script type="module" src="app.js?v=20"></script>
+  <script type="module" src="app.js?v=21"></script>
 </body>
 </html>
