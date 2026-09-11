@@ -134,3 +134,35 @@ summary:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid v
 .club-shelf-form label { display:grid; gap:6px; flex:1 1 160px; min-width:0; }
 .club-shelf-form select { width:100%; }
 .club-shelf-form .form-message { flex-basis:100%; margin:0; }
+
+/* Memories is a dedicated gallery, separate from the scrolling club homepage. */
+#homeContent[hidden],#memories[hidden] { display:none!important; }
+#events.split-section { grid-template-columns:minmax(0,1fr); }
+.memories-page { padding-block:32px 56px; min-height:70vh; }
+.memories-page .memories-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.memories-page .memory { min-height:0; background:var(--surface); border:1px solid var(--line); }
+.memory-photo { position:relative; display:block; width:100%; aspect-ratio:4/3; padding:0; border:0; overflow:hidden; background:var(--paper); cursor:zoom-in; }
+.memory-photo > img { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:cover; }
+.memory-photo:focus-visible { outline:3px solid var(--orange); outline-offset:-4px; }
+.memory-photo .memory-fallback { display:grid; place-items:center; width:100%; height:100%; padding:24px; color:var(--ink); }
+.memory > .memory-caption { position:static; padding:16px; color:var(--ink); background:var(--surface); }
+.memory-caption small { font-size:12px; color:var(--muted); }
+.memory-caption h3 { font-size:20px; overflow-wrap:anywhere; }
+.memory-caption .memory-link,.memory-caption .memory-association { color:var(--ink); font-size:14px; line-height:1.5; }
+.memory-caption .memory-link { min-height:44px; }
+.memories-page .memory-edit-form { max-width:720px; margin-top:32px; }
+.memory-photo-dialog { width:min(1200px,calc(100% - 24px)); }
+.memory-photo-card { gap:16px; padding:20px; }
+.memory-photo-card h2 { padding-right:54px; font-size:1.5rem; overflow-wrap:anywhere; }
+#memoryPhotoContent { min-width:0; }
+#memoryPhotoContent img { display:block; width:100%; height:auto; max-height:75dvh; object-fit:contain; background:var(--paper); }
+#memoryPhotoContent a { display:inline-block; padding-block:12px; color:var(--ink); font-size:14px; }
+.desktop-nav a[aria-current="page"],.mobile-nav a[aria-current="page"] { color:var(--accent-text); text-decoration:underline; text-underline-offset:5px; }
+@media (max-width:1000px) { .mobile-nav { grid-template-columns:repeat(5,minmax(0,1fr)); } }
+@media (max-width:700px) {
+  .memories-page .memories-grid { grid-template-columns:minmax(0,1fr); gap:20px; }
+  .memory-photo-dialog .memory-photo-card { min-height:100%; padding:16px; }
+  .memory-photo-card .close-dialog { position:sticky; top:0; display:block; margin-left:auto; z-index:2; }
+  .memory-photo-card h2 { padding-right:0; }
+  #memoryPhotoContent img { max-height:65dvh; }
+}
