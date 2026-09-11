@@ -38,21 +38,26 @@ summary:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid v
 #shelfExpandButton { justify-self:center; }
 .books-grid { align-items:start; }
 .books-grid.is-expanded { grid-auto-flow:row; grid-template-columns:repeat(auto-fill,minmax(145px,1fr)); grid-auto-columns:auto; overflow:visible; }
-.book-card { display:grid; grid-template-rows:auto 1fr; aspect-ratio:auto; padding:0; color:var(--ink); background:var(--surface); border:1px solid var(--line); box-shadow:none; }
-.book-card > img,.book-card > .fallback-cover { position:static; inset:auto; display:block; width:100%; height:auto; aspect-ratio:2/3; object-fit:contain; background:var(--paper); }
-.book-card > .fallback-cover { display:grid; color:var(--ink); min-height:0; }
-.book-card > .shelf-book-copy { position:static; display:grid; gap:4px; padding:12px; opacity:1; background:none; width:auto; -webkit-line-clamp:unset; }
-.shelf-book-copy strong { font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
-.shelf-book-copy small { color:var(--muted); font-size:12px; font-weight:400; overflow-wrap:anywhere; }
+/* The artwork sets the tile's height: a fixed ratio either crops it or adds bars. */
+.book-card { display:block; aspect-ratio:auto; padding:0; border:0; color:#fff; background:transparent; box-shadow:none; }
+.book-card > img { position:static; inset:auto; display:block; width:100%; height:auto; aspect-ratio:auto; object-fit:contain; }
+.book-card > .fallback-cover { position:static; inset:auto; display:grid; width:100%; height:auto; min-height:0; aspect-ratio:2/3; opacity:1; color:#fff; }
+.book-card > .shelf-book-copy { position:absolute; inset:auto 0 0; display:block; width:100%; padding:32px 10px 10px; opacity:0; color:#fff; background:linear-gradient(transparent,rgba(0,0,0,.85)); -webkit-line-clamp:unset; pointer-events:none; }
+.shelf-book-copy strong { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
+.shelf-book-copy small { display:none; }
+.book-card:hover > .shelf-book-copy,.book-card:focus-visible > .shelf-book-copy { opacity:1; }
 .book-card:hover { transform:translateY(-3px); box-shadow:var(--shadow); }
+@media (hover:none) { .book-card > .shelf-book-copy { opacity:1; } .book-card:hover { transform:none; } }
 .discovery-section { margin-bottom:32px; }
 .discovery-filter { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-block:16px; }
 .discovery-filter label { font-size:14px; color:var(--muted); }
 .discovery-filter select { width:min(100%,320px); }
 .discovery-collections { margin-top:0; }
-.discovery-row { grid-auto-flow:row; grid-template-columns:repeat(3,minmax(0,1fr)); grid-auto-columns:auto; overflow:visible; }
-.discovery-book > button { grid-template-columns:64px minmax(0,1fr); grid-template-rows:1fr; align-items:center; gap:12px; min-height:120px; }
-.discovery-cover { width:64px; }
+.discovery-row { grid-auto-flow:row; grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-columns:auto; align-items:start; overflow:visible; }
+.discovery-book > button { grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; align-items:start; gap:10px; min-height:0; }
+.discovery-cover { width:100%; aspect-ratio:auto; }
+.discovery-cover > img { display:block; width:100%; height:auto; aspect-ratio:auto; object-fit:contain; }
+.discovery-cover > .fallback-cover { display:grid; place-items:center; height:auto; aspect-ratio:2/3; padding:12px; overflow-wrap:anywhere; }
 .discovery-copy { padding:0; }
 .discovery-copy strong { font-size:14px; -webkit-line-clamp:3; }
 .discovery-copy small { font-size:12px; white-space:normal; }
@@ -97,8 +102,9 @@ summary:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid v
   .month-card .month-details { white-space:normal; font-size:13px; }
   .month-community { padding:14px; }
   .month-summary { display:grid; }
-  .discovery-row { grid-template-columns:1fr; }
-  .discovery-book > button { min-height:108px; }
+  .discovery-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .discovery-book > button { min-height:0; }
+  .books-grid.is-expanded { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .discovery-filter { display:grid; gap:6px; }
   .discovery-filter select { width:100%; }
   .book-detail { grid-template-columns:90px minmax(0,1fr); gap:18px; }
