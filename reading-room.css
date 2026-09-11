@@ -211,3 +211,11 @@ body:has(#memoryPhotoDialog[open]) { overflow:hidden; }
 .memory-group { margin-bottom: 40px; }
 .memory-group > h3 { overflow-wrap: anywhere; margin-bottom: 16px; }
 .memory-group > h3 small { color: var(--muted); font: 14px var(--font-body, sans-serif); }
+
+.memory-photo-navigation { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 16px; flex-wrap: wrap; }
+.memory-photo-navigation .button { min-height: 44px; }
+.memory-photo-navigation span { color: var(--muted); }
+.saved-book-indicator { display: block; padding: 6px 10px; font-size: 12px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; }
+.saved-book-indicator[hidden] { display: none; }
+.book-card > .saved-book-indicator { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 2; }
+.book-comment[data-notification-target] { outline: 2px solid var(--accent-text); outline-offset: 4px; scroll-margin-block: 24px; }
