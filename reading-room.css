@@ -190,3 +190,16 @@ body:has(#memoryPhotoDialog[open]) { overflow:hidden; }
   #memoryPhotoContent .memory-viewer-stage { height:clamp(220px,64dvh,900px); padding:8px; }
   #memoryPhotoContent .memory-viewer-footer { padding:12px 16px calc(16px + env(safe-area-inset-bottom)); }
 }
+
+.library-controls { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-block:24px 12px; }
+.library-controls label,.personal-entry-form label { display:grid; gap:6px; min-width:0; font-size:14px; color:var(--ink); }
+.library-controls input,.library-controls select { width:100%; min-width:0; }
+.library-controls .text-button { justify-self:start; min-height:44px; }
+#libraryResults { margin-bottom:12px; }
+.personal-entry-editor { margin-top:20px; border-top:1px solid var(--line); padding-top:12px; }
+.personal-entry-editor summary { min-height:44px; padding-block:10px; cursor:pointer; font-weight:600; }
+.personal-entry-form { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin-top:12px; }
+.personal-entry-form small { color:var(--muted); font-size:12px; }
+@media(max-width:700px) { .library-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } .library-controls label:first-child { grid-column:1/-1; } }
+
+.personal-entry-form [data-completion-label][hidden] { display:none; }
