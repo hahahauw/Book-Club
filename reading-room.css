@@ -39,7 +39,7 @@ summary:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid v
 .books-grid { align-items:start; }
 .books-grid.is-expanded { grid-auto-flow:row; grid-template-columns:repeat(auto-fill,minmax(145px,1fr)); grid-auto-columns:auto; overflow:visible; }
 .book-card { display:grid; grid-template-rows:auto 1fr; aspect-ratio:auto; padding:0; color:var(--ink); background:var(--surface); border:1px solid var(--line); box-shadow:none; }
-.book-card > img,.book-card > .fallback-cover { display:block; width:100%; height:auto; aspect-ratio:2/3; object-fit:cover; background:var(--paper); }
+.book-card > img,.book-card > .fallback-cover { position:static; inset:auto; display:block; width:100%; height:auto; aspect-ratio:2/3; object-fit:contain; background:var(--paper); }
 .book-card > .fallback-cover { display:grid; color:var(--ink); min-height:0; }
 .book-card > .shelf-book-copy { position:static; display:grid; gap:4px; padding:12px; opacity:1; background:none; width:auto; -webkit-line-clamp:unset; }
 .shelf-book-copy strong { font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
