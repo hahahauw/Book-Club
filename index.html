@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=14">
-  <link rel="stylesheet" href="reading-room.css?v=8">
+  <link rel="stylesheet" href="reading-room.css?v=9">
 </head>
 <body>
   <header class="site-header">
@@ -104,7 +104,7 @@
 
   <nav class="mobile-nav" aria-label="Mobile navigation"><a href="#top"><span aria-hidden="true">⌂</span>Home</a><a href="#shelf"><span aria-hidden="true">▤</span>Books</a><a href="#events"><span aria-hidden="true">◇</span>Events</a><a href="#memories"><span aria-hidden="true">▧</span>Memories</a><a href="#members"><span aria-hidden="true">♧</span>Members</a></nav>
 
-  <dialog id="memoryPhotoDialog" class="dialog memory-photo-dialog" aria-labelledby="memoryPhotoTitle"><article class="dialog-card memory-photo-card"><header class="memory-viewer-header"><div><p class="eyebrow">CLUB MEMORIES</p><h2 id="memoryPhotoTitle"></h2></div><button type="button" class="close-dialog" data-close="memoryPhotoDialog" aria-label="Close photo">×</button></header><div id="memoryPhotoContent"></div></article></dialog>
+  <dialog id="memoryPhotoDialog" class="dialog memory-photo-dialog" aria-labelledby="memoryPhotoTitle"><article class="dialog-card memory-photo-card"><header class="memory-viewer-header"><div><p class="eyebrow">CLUB MEMORIES</p><h2 id="memoryPhotoTitle"></h2></div><button type="button" class="close-dialog" data-close="memoryPhotoDialog" aria-label="Close photo">×</button></header><div id="memoryPhotoContent"></div><nav id="memoryPhotoNavigation" class="memory-photo-navigation" aria-label="Photo navigation"></nav></article></dialog>
 
   <dialog id="suggestionDialog" class="dialog" aria-labelledby="suggestionDialogTitle"><form id="suggestionForm" class="dialog-card"><button class="close-dialog" type="button" data-close="suggestionDialog" aria-label="Close">×</button><p class="eyebrow">ADD TO THE CONVERSATION</p><h2 id="suggestionDialogTitle">Suggest a book</h2><label>Your name <input id="suggestName" maxlength="60" required></label><label>Book title <input id="suggestTitle" maxlength="160" required></label><label>Author <input id="suggestAuthor" maxlength="100" required></label><label>Genre <input id="suggestGenre" maxlength="80"></label><label>Page count (optional) <input id="suggestPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Use the published edition’s page count"></label><label>Cover image URL <input id="suggestCover" type="url" maxlength="500" placeholder="Optional"></label><label>Why should others read this? <textarea id="suggestWhy" maxlength="800"></textarea></label><button class="button" type="submit">Send suggestion</button><p id="suggestionMessage" class="form-message" aria-live="polite"></p></form></dialog>
 
@@ -116,6 +116,6 @@
   <dialog id="notificationDialog" class="dialog" aria-labelledby="notificationDialogTitle"><article class="dialog-card notification-dialog-card"><button class="close-dialog" type="button" data-close="notificationDialog" aria-label="Close">×</button><div class="notification-header"><div><p class="eyebrow">YOUR CLUB UPDATES</p><h2 id="notificationDialogTitle">Notifications</h2></div><button id="markNotificationsRead" type="button" class="text-button">Mark all as read</button></div><p class="catalog-intro">Direct replies and important club updates appear here—nothing noisy.</p><div id="notificationList" class="notification-list" aria-busy="true"><span class="skeleton skeleton-activity" aria-hidden="true"></span><span class="skeleton skeleton-activity" aria-hidden="true"></span></div><p id="notificationStatus" class="form-message" aria-live="polite"></p></article></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" popover="manual"></div>
-  <script type="module" src="app.js?v=23"></script>
+  <script type="module" src="app.js?v=24"></script>
 </body>
 </html>

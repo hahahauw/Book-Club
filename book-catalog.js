@@ -142,14 +142,14 @@ function mergeResults(results) {
 
 async function searchOpenLibrary(term) {
   const compact = term.replace(/[\s-]/g, "");
-  const params = new URLSearchParams({ q: /^97[89]\d{10}$|^\d{9}[\dXx]$/.test(compact) ? `isbn:${compact}` : term, fields: "key,title,author_name,first_publish_year,isbn,cover_i,first_sentence,subject,number_of_pages_median", limit: "10" });
+  const params = new URLSearchParams({ q: /^97[89]\d{10}$|^\d{9}[\dXx]$/.test(compact) ? `isbn:${compact}` : term, fields: "key,title,author_name,first_publish_year,isbn,cover_i,first_sentence,subject,number_of_pages_median", limit: "20" });
   const data = await fetchJson(`${OPEN_LIBRARY_SEARCH_URL}?${params}`);
   return (data.docs || []).map(normalizeOpenLibrary).filter((book) => book.openLibraryKey && book.title);
 }
 
 async function searchGoogleBooks(term, apiKey) {
   const compact = term.replace(/[\s-]/g, "");
-  const params = new URLSearchParams({ q: /^97[89]\d{10}$|^\d{9}[\dXx]$/.test(compact) ? `isbn:${compact}` : term, maxResults: "10", printType: "books", projection: "full", key: apiKey });
+  const params = new URLSearchParams({ q: /^97[89]\d{10}$|^\d{9}[\dXx]$/.test(compact) ? `isbn:${compact}` : term, maxResults: "20", printType: "books", projection: "full", key: apiKey });
   const data = await fetchJson(`${GOOGLE_BOOKS_SEARCH_URL}?${params}`);
   return (data.items || []).map(normalizeGoogleBooks).filter((book) => book.googleBooksId && book.title);
 }
@@ -162,7 +162,7 @@ export async function searchCatalog(query, options = {}) {
   const settled = await Promise.allSettled(searches);
   const books = settled.filter((result) => result.status === "fulfilled").flatMap((result) => result.value);
   if (!books.length && settled.every((result) => result.status === "rejected")) throw new Error("The book catalogues could not be reached. Manual entry still works.");
-  return mergeResults(books).slice(0, 12);
+  return mergeResults(books).slice(0, 40);
 }
 
 export async function loadCatalogDetails(book) {
