@@ -861,7 +861,7 @@ function eventRsvpMarkup(event, past) {
 function eventCard(event, past) {
   const memories = linkedEventMemories(event.id), counts = eventCounts(event), responseTotal = counts.going + counts.maybe + counts.cant_attend;
   const historyLocked = memories.length > 0 || responseTotal > 0;
-  const officerAction = isOfficer() ? (historyLocked ? '<span class="form-message">Kept in club history</span>' : `<button class="text-button" type="button" data-remove-event="${escapeHtml(event.id)}">Remove event</button>`) : "";
+  const officerAction = isOfficer() ? `<button class="text-button" type="button" data-edit-event="${escapeHtml(event.id)}">Edit event</button>` + (historyLocked ? '<span class="form-message">Kept in club history</span>' : `<button class="text-button" type="button" data-remove-event="${escapeHtml(event.id)}">Remove event</button>`) : "";
   return `<article id="event-${escapeHtml(event.id)}" class="event"><time datetime="${escapeHtml(event.date || "")}">${escapeHtml(eventDateLabel(event.date))}</time><div><h3>${escapeHtml(event.title)}</h3>${event.details ? `<p>${escapeHtml(event.details)}</p>` : ""}</div>${eventRsvpMarkup(event, past)}${eventMemoryStrip(event.id)}${officerAction}</article>`;
 }
 function renderEvents() {
@@ -902,13 +902,43 @@ async function saveEventRsvp(eventId, status) {
     event.rsvpGoing = previousCounts.going; event.rsvpMaybe = previousCounts.maybe; event.rsvpCantAttend = previousCounts.cant_attend; toast(error.message || "Could not save that RSVP.");
   } finally { state.rsvpBusy.delete(eventId); renderEvents(); }
 }
+function resetEventEditor() {
+  state.eventEditing = null; ui.eventForm.reset();
+  ui.eventForm.querySelector('button[type="submit"]').textContent = "Add event";
+  $("eventCancelEdit").hidden = true; $("eventStatus").textContent = "";
+}
+function editEvent(id) {
+  if (!isOfficer() || state.eventSaving) return;
+  const item = state.events.find((item) => item.id === id); if (!item) return;
+  state.eventEditing = { ...item };
+  ui.eventTitle.value = item.title || ""; ui.eventDate.value = item.date || ""; ui.eventDetails.value = item.details || "";
+  ui.eventForm.querySelector('button[type="submit"]').textContent = "Save event";
+  $("eventCancelEdit").hidden = false; $("eventStatus").textContent = "Editing this event. Existing RSVPs and linked photos will stay attached.";
+  ui.eventForm.scrollIntoView({ block: "center" }); ui.eventTitle.focus();
+}
 async function addEvent(event) {
-  event.preventDefault(); if (!isOfficer()) return;
-  const button = event.currentTarget.querySelector("button[type=submit]");
-  await runBusy(button, "Adding…", async () => {
-    try { const added = await addDoc(collection(db, "events"), { title: ui.eventTitle.value.trim(), date: ui.eventDate.value, details: ui.eventDetails.value.trim(), createdAt: new Date().toISOString(), rsvpGoing: 0, rsvpMaybe: 0, rsvpCantAttend: 0 }); await publishClubNotifications("event_added", { eventId: added.id }); ui.eventForm.reset(); toast("Event added."); }
-    catch (error) { console.error(error); toast("Could not add the event."); }
-  });
+  event.preventDefault(); if (!isOfficer() || state.eventSaving) return;
+  const editing = state.eventEditing, uid = state.user.uid;
+  const payload = { title: ui.eventTitle.value.trim(), date: ui.eventDate.value, details: ui.eventDetails.value.trim() };
+  const date = new Date(`${payload.date}T12:00:00`);
+  if (!payload.title || Number.isNaN(date.valueOf()) || localDateKey(date) !== payload.date) { $("eventStatus").textContent = "Enter a title and a valid date."; return; }
+  state.eventSaving = true;
+  const controls = [...ui.eventForm.elements]; controls.forEach((input) => input.disabled = true);
+  try {
+    if (editing) await runTransaction(db, async (transaction) => {
+      const ref = doc(db, "events", editing.id), snapshot = await transaction.get(ref);
+      if (!isOfficer() || state.user?.uid !== uid) throw new Error("Sign in again before saving.");
+      if (!snapshot.exists()) throw new Error("This event was removed. Cancel editing to add a new event.");
+      if (["title", "date", "details"].some((key) => (snapshot.data()[key] || "") !== (editing[key] || ""))) throw new Error("Another officer changed this event. Cancel and reopen Edit to load their changes.");
+      transaction.update(ref, payload);
+    });
+    else {
+      const added = await addDoc(collection(db, "events"), { ...payload, createdAt: new Date().toISOString(), rsvpGoing: 0, rsvpMaybe: 0, rsvpCantAttend: 0 });
+      await publishClubNotifications("event_added", { eventId: added.id });
+    }
+    resetEventEditor(); toast(editing ? "Event updated. RSVPs kept." : "Event added.");
+  } catch (error) { $("eventStatus").textContent = error.message || "Could not save. Please retry."; }
+  finally { state.eventSaving = false; controls.forEach((input) => input.disabled = false); }
 }
 function renderMemoryOptions() {
   if (!ui.memoryEvent || !ui.memoryBook) return;
@@ -960,30 +990,72 @@ function openMemoryPhoto(memoryId) {
   state.memoryPhotoTrigger = $(`memory-${memoryId}`)?.querySelector(".memory-photo") || $("memoriesHeading");
   state.lastDialogTrigger = state.memoryPhotoTrigger;
 }
+function memoryCard(memory) {
+  return `<article id="memory-${escapeHtml(memory.id)}" class="memory"><button type="button" class="memory-photo" data-memory-focus="${escapeHtml(memory.id)}" aria-label="Open full photo: ${escapeHtml(memory.title || "Club memory")}"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 1200))}" alt="${escapeHtml(memory.title || "Club memory")}" loading="lazy" decoding="async" width="1200" height="900"></button><div class="memory-caption"><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3>${memoryAssociationMarkup(memory)}</div>${isOfficer() ? `<div class="memory-link-controls"><button type="button" data-edit-memory="${escapeHtml(memory.id)}">Edit</button></div><button class="remove-button" type="button" data-remove-memory="${escapeHtml(memory.id)}" aria-label="Remove memory">×</button>` : ""}</article>`;
+}
+function memoryGroups(memories, mode) {
+  const groups = new Map();
+  for (const memory of recentFirst(memories)) {
+    const key = mode === "event" ? (memory.eventId || "") : mode === "category" ? (memory.category?.trim() || "") : "all";
+    const label = mode === "event" ? (key ? state.events.find((event) => event.id === key)?.title || memory.eventTitleSnapshot || "Unavailable event" : "Without an event") : mode === "category" ? key || "Uncategorized" : "All photos";
+    if (!groups.has(key)) groups.set(key, { label, items: [] });
+    groups.get(key).items.push(memory);
+  }
+  return [...groups.values()];
+}
 function renderMemories() {
-  ui.memories.innerHTML = state.memories.length ? recentFirst(state.memories).map((memory) => `<article id="memory-${escapeHtml(memory.id)}" class="memory"><button type="button" class="memory-photo" data-memory-focus="${escapeHtml(memory.id)}" aria-label="Open full photo: ${escapeHtml(memory.title || "Club memory")}"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 1200))}" alt="${escapeHtml(memory.title || "Club memory")}" loading="lazy" decoding="async" width="1200" height="900"></button><div class="memory-caption"><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3>${memoryAssociationMarkup(memory)}</div>${isOfficer() ? `<div class="memory-link-controls"><button type="button" data-edit-memory="${escapeHtml(memory.id)}">Edit</button></div><button class="remove-button" type="button" data-remove-memory="${escapeHtml(memory.id)}" aria-label="Remove memory">×</button>` : ""}</article>`).join("") : '<p class="empty-state">The club’s first reading memory will appear here soon.</p>';
+  const mode = $("memoryGroupBy")?.value || "recent", groups = memoryGroups(state.memories, mode);
+  ui.memories.classList.toggle("is-grouped", mode !== "recent");
+  ui.memories.innerHTML = groups.length ? (mode === "recent" ? groups[0].items.map(memoryCard).join("") : groups.map((group) => `<section class="memory-group"><h3>${escapeHtml(group.label)} <small>${group.items.length} photos</small></h3><div class="memories-grid">${group.items.map(memoryCard).join("")}</div></section>`).join("")) : '<p class="empty-state">The club’s first reading memory will appear here soon.</p>';
   renderEvents();
 }
 function resetMemoryEditor() {
-  state.memoryEditingId = null; ui.memoryEditId.value = ""; ui.memoryForm.reset(); ui.memorySave.textContent = "Add memory"; ui.memoryCancelEdit.hidden = true; ui.memoryStatus.textContent = ""; renderMemoryOptions();
+  if (state.memoryUploading) return;
+  [...ui.memoryForm.elements].forEach((input) => input.disabled = false); ui.memoryCancelEdit.textContent = "Cancel edit";
+  state.memoryUploadQueue = null; ui.memoryFile.multiple = true; state.memoryEditingId = null; ui.memoryEditId.value = ""; ui.memoryForm.reset(); ui.memorySave.textContent = "Add memory"; ui.memoryCancelEdit.hidden = true; ui.memoryStatus.textContent = ""; renderMemoryOptions();
 }
 function editMemory(memoryId) {
-  if (!isOfficer()) return; const memory = state.memories.find((item) => item.id === memoryId); if (!memory) return;
+  if (!isOfficer() || state.memoryUploading) return; if (state.memoryUploadQueue) { toast("Finish or discard the failed uploads before editing another photo."); return; } state.memoryUploadQueue = null; ui.memoryFile.value = ""; ui.memoryFile.multiple = false; const memory = state.memories.find((item) => item.id === memoryId); if (!memory) return;
   state.memoryEditingId = memoryId; ui.memoryEditId.value = memoryId; ui.memoryImage.value = memory.imageUrl || ""; ui.memoryCaption.value = memory.title || ""; ui.memoryCategory.value = memory.category || ""; renderMemoryOptions(); ui.memoryEvent.value = memory.eventId || ""; ui.memoryBook.value = memory.bookId || ""; ui.memorySave.textContent = "Save changes"; ui.memoryCancelEdit.hidden = false; ui.memoryStatus.textContent = "Editing this memory. Leave the image fields unchanged to keep its current photo."; ui.memoryForm.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); ui.memoryCaption.focus();
 }
 async function addMemory(event) {
-  event.preventDefault(); if (!isOfficer()) return;
-  await runBusy(ui.memorySave, state.memoryEditingId ? "Saving…" : "Adding…", async () => {
+  event.preventDefault(); if (!isOfficer() || state.memoryUploading) return;
+  const uid = state.user.uid, existing = state.memories.find((memory) => memory.id === state.memoryEditingId);
+  const files = [...(ui.memoryFile.files || [])];
+  if (files.length > 20) { ui.memoryStatus.textContent = "Choose up to 20 photos at a time."; return; }
+  if (!state.memoryUploadQueue) {
+    const imageUrl = ui.memoryImage.value.trim() || existing?.imageUrl || "";
+    if (!files.length && !safeImageUrl(imageUrl)) { ui.memoryStatus.textContent = "Add a valid image URL or choose photos."; return; }
+    const linkedEvent = state.events.find((item) => item.id === ui.memoryEvent.value), linkedBook = state.books.find((item) => item.id === ui.memoryBook.value);
+    const payload = { title: ui.memoryCaption.value.trim(), category: ui.memoryCategory.value.trim(), date: existing?.date || new Date().toISOString(), eventId: ui.memoryEvent.value, bookId: ui.memoryBook.value, eventTitleSnapshot: linkedEvent?.title || (ui.memoryEvent.value ? existing?.eventTitleSnapshot || "" : ""), eventDateSnapshot: linkedEvent?.date || (ui.memoryEvent.value ? existing?.eventDateSnapshot || "" : ""), bookTitleSnapshot: linkedBook?.title || (ui.memoryBook.value ? existing?.bookTitleSnapshot || "" : ""), bookAuthorSnapshot: linkedBook?.author || (ui.memoryBook.value ? existing?.bookAuthorSnapshot || "" : "") };
+    if (!payload.title) { ui.memoryStatus.textContent = "Add a caption for these photos."; return; }
+    state.memoryUploadQueue = (files.length ? files : [null]).map((file) => ({ uid, file, imageUrl: file ? "" : imageUrl, payload, ref: existing ? doc(db, "memories", existing.id) : doc(collection(db, "memories")), editing: Boolean(existing), saved: false }));
+  }
+  const queue = state.memoryUploadQueue;
+  if (queue.some((item) => item.uid !== uid)) { ui.memoryStatus.textContent = "This upload belongs to another session. Cancel and select your photos again."; return; }
+  state.memoryUploading = true;
+  const controls = [...ui.memoryForm.elements]; controls.forEach((input) => input.disabled = true);
+  let failures = 0;
+  for (const [index, item] of queue.entries()) {
+    if (item.saved) continue;
+    ui.memoryStatus.textContent = `Saving photo ${index + 1} of ${queue.length}…`;
     try {
-      const existing = state.memories.find((memory) => memory.id === state.memoryEditingId), file = ui.memoryFile.files?.[0];
-      const imageUrl = file ? await uploadImage(file) : (ui.memoryImage.value.trim() || existing?.imageUrl || "");
-      if (!imageUrl) throw new Error("Add an image URL or choose a photo.");
-      const linkedEvent = state.events.find((item) => item.id === ui.memoryEvent.value), linkedBook = state.books.find((item) => item.id === ui.memoryBook.value);
-      const payload = { imageUrl, title: ui.memoryCaption.value.trim(), category: ui.memoryCategory.value.trim(), date: existing?.date || new Date().toISOString(), eventId: ui.memoryEvent.value, bookId: ui.memoryBook.value, eventTitleSnapshot: linkedEvent?.title || (ui.memoryEvent.value ? existing?.eventTitleSnapshot || "" : ""), eventDateSnapshot: linkedEvent?.date || (ui.memoryEvent.value ? existing?.eventDateSnapshot || "" : ""), bookTitleSnapshot: linkedBook?.title || (ui.memoryBook.value ? existing?.bookTitleSnapshot || "" : ""), bookAuthorSnapshot: linkedBook?.author || (ui.memoryBook.value ? existing?.bookAuthorSnapshot || "" : ""), updatedAt: serverTimestamp() };
-      if (existing) await setDoc(doc(db, "memories", existing.id), payload, { merge: true }); else await addDoc(collection(db, "memories"), payload);
-      const changed = Boolean(existing); resetMemoryEditor(); toast(changed ? "Reading memory updated." : "Reading memory added.");
-    } catch (error) { console.error(error); ui.memoryStatus.textContent = error.message || "Could not save the memory."; }
-  });
+      if (!isOfficer() || state.user?.uid !== uid) throw new Error("Your session changed.");
+      if (!item.imageUrl) item.imageUrl = await uploadImage(item.file);
+      if (!isOfficer() || state.user?.uid !== uid) throw new Error("Your session changed.");
+      const payload = { ...item.payload, imageUrl: item.imageUrl, updatedAt: serverTimestamp() };
+      if (item.editing) await updateDoc(item.ref, payload); else await setDoc(item.ref, payload);
+      item.saved = true; item.error = "";
+    } catch (error) { failures++; item.error = `${item.file?.name || "Photo"}: ${error.message || "Could not save"}`; }
+  }
+  state.memoryUploading = false; controls.forEach((input) => input.disabled = false);
+  if (failures) {
+    // Keep captured metadata, uploaded URLs and document IDs for a safe retry.
+    controls.filter((input) => input !== ui.memorySave && input !== ui.memoryCancelEdit).forEach((input) => input.disabled = true);
+    ui.memoryCancelEdit.hidden = false; ui.memoryCancelEdit.textContent = "Finish / discard failed uploads";
+    ui.memorySave.textContent = "Retry failed photos";
+    ui.memoryStatus.textContent = `${queue.filter((item) => item.saved).length} of ${queue.length} saved. ` + queue.filter((item) => !item.saved).map((item) => item.error).join("; ");
+  } else { resetMemoryEditor(); toast(existing ? "Reading memory updated." : `${queue.length} photo${queue.length === 1 ? "" : "s"} added.`); }
 }
 async function addInvite(event) { event.preventDefault(); if (!isOfficer()) return; const email = ui.inviteEmail.value.trim().toLowerCase(); if (!email) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Approving…", async () => { try { await setDoc(doc(db, "allowedEmails", email), { email, invitedAt: new Date().toISOString() }); ui.inviteForm.reset(); toast("That email can now create a member library."); } catch (error) { console.error(error); toast("Could not approve that email."); } }); }
 
@@ -1580,6 +1652,8 @@ document.addEventListener("click", async (event) => {
   if (reaction) await toggleBookReaction(reaction.dataset.bookReaction);
   const rsvp = event.target.closest("[data-rsvp-event][data-rsvp-status]");
   if (rsvp) await saveEventRsvp(rsvp.dataset.rsvpEvent, rsvp.dataset.rsvpStatus);
+  const eventEdit = event.target.closest("[data-edit-event]");
+  if (eventEdit) editEvent(eventEdit.dataset.editEvent);
   const memoryEdit = event.target.closest("[data-edit-memory]");
   if (memoryEdit) editMemory(memoryEdit.dataset.editMemory);
   const memoryFocus = event.target.closest("[data-memory-focus]");
@@ -1675,3 +1749,6 @@ updateMemoryView(false);
 
 ui.monthForm.addEventListener("input", rememberMonthDraft);
 ui.monthForm.addEventListener("change", rememberMonthDraft);
+
+$("eventCancelEdit").addEventListener("click", resetEventEditor);
+$("memoryGroupBy").addEventListener("change", renderMemories);

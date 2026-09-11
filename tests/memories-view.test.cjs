@@ -13,7 +13,7 @@ function setup(hash = '') {
   let shown = 0; let notices = [];
   const context = vm.createContext({ $, location: { hash }, document: { querySelectorAll: () => links }, window: { scrollTo() {} },
     requestAnimationFrame: fn => fn(), updateShelfNavigation() {},
-    state: { memories: [] }, ui: { memories: {} },
+    state: { memories: [] }, ui: { memories: { classList: { toggle() {} } } },
     safeImageUrl: value => String(value || '').startsWith('https://') ? value : '',
     optimizedImageUrl: value => value, escapeHtml: value => String(value || '').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;'),
     showDialog: dialog => { dialog.open = true; shown++; }, toast: value => notices.push(value),
