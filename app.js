@@ -923,7 +923,7 @@ function openMemoryPhoto(memoryId) {
   updateMemoryView(false);
   const url = safeImageUrl(memory.imageUrl);
   $("memoryPhotoTitle").textContent = memory.title || "Club memory";
-  $("memoryPhotoContent").innerHTML = url ? `<img src="${escapeHtml(optimizedImageUrl(url, 2000))}" alt="${escapeHtml(memory.title || "Club memory")}" decoding="async" referrerpolicy="no-referrer"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open original photo in a new tab</a>` : '<p role="status">This photo is unavailable.</p>';
+  $("memoryPhotoContent").innerHTML = url ? `<div class="memory-viewer-stage"><img src="${escapeHtml(optimizedImageUrl(url, 2000))}" alt="${escapeHtml(memory.title || "Club memory")}" decoding="async" referrerpolicy="no-referrer"></div><footer class="memory-viewer-footer"><span>${escapeHtml(memory.category || "Club memory")}</span><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open original photo in a new tab">Open original <span aria-hidden="true">↗</span></a></footer>` : '<p role="status">This photo is unavailable.</p>';
   const dialog = $("memoryPhotoDialog");
   if (!dialog.open) showDialog(dialog);
   state.memoryPhotoTrigger = $(`memory-${memoryId}`)?.querySelector(".memory-photo") || $("memoriesHeading");
