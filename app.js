@@ -1155,6 +1155,63 @@ async function toggleFavorite(entryId) {
   } catch (error) { console.error(error); toast("Could not update your favorites."); }
 }
 
+async function addClubBookToShelf(event, book) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const message = form.querySelector('[role="status"]');
+  if (button.disabled) return;
+  if (!isMember()) {
+    message.textContent = "Sign in with your approved member account, then add this book.";
+    if (!state.user) ui.signIn.click();
+    return;
+  }
+  const uid = state.user.uid;
+  const status = form.querySelector('select').value;
+  if (!["reading", "read", "want-to-read"].includes(status)) return;
+  button.disabled = true;
+  message.textContent = "Adding to your shelf…";
+  try {
+    const entries = await getDocs(collection(db, "memberShelves", uid, "entries"));
+    if (!isMember() || state.user?.uid !== uid) throw new Error("Your session changed. Reopen this book and try again.");
+    const existing = entries.docs.find((entry) => sameBook(entry.data(), book));
+    if (existing) {
+      message.textContent = `Already on your ${String(existing.data().status || "reading").replace(/-/g, " ")} shelf. You can edit it in My library.`;
+      return;
+    }
+    const text = (value, max) => String(value || "").trim().slice(0, max);
+    const entry = withPageCount({
+      title: text(book.title, 160) || "Untitled book", author: text(book.author, 100) || "Unknown author",
+      coverUrl: text(automaticCoverUrl(book), 500), genre: text(book.genre, 80),
+      synopsis: text(book.synopsis, 3000), catalogKey: text(book.catalogKey, 200),
+      catalogId: text(book.catalogId, 200), openLibraryKey: text(book.openLibraryKey, 200),
+      googleBooksId: text(book.googleBooksId, 200), isbn: text(book.isbn, 20),
+      publicationYear: text(book.publicationYear, 20), source: text(book.source, 100),
+      status, note: "", date: new Date().toISOString()
+    }, book.pageCount);
+    if (status === "read") entry.completedAt = serverTimestamp();
+    // A stable destination plus a transaction prevents two tabs adding this club book twice.
+    const ref = doc(db, "memberShelves", uid, "entries", `club_${book.id}`);
+    const added = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!isMember() || state.user?.uid !== uid) throw new Error("Your session changed. Reopen this book and try again.");
+      if (snapshot.exists()) return false;
+      transaction.set(ref, entry);
+      return true;
+    });
+    message.textContent = added ? `Added to your ${status.replace(/-/g, " ")} shelf. Find it in My library.` : "This book is already in My library. Your existing entry was kept.";
+    if (added) {
+      toast("Added to your shelf.");
+      if (state.user?.uid === uid) await recordActivity(activityTypeForStatus(status), entry, { shelfEntryId: ref.id, publicBookId: book.id, key: `${ref.id}_${status}` });
+    }
+  } catch (error) {
+    console.error(error);
+    message.textContent = error.code === "permission-denied" ? "Could not add this book. Check that your member account still has access, then try again." : "Could not add this book. Check your connection and signed-in account, then try again.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function openBookDetails(book, personal = false) {
   stopBookSocialSubscriptions();
   const title = book.title || "Untitled book";
@@ -1170,9 +1227,11 @@ function openBookDetails(book, personal = false) {
   const reactions = `<section class="book-reactions" aria-labelledby="reactionHeading"><div><h3 id="reactionHeading">Quick reactions</h3><p>A small pulse-check from club readers. Each member gets one reaction per book.</p></div><div id="reactionSummary" class="reaction-summary" aria-live="polite"><p class="empty-state">Loading reactions…</p></div><div id="reactionPicker" class="reaction-picker"></div><p id="reactionStatus" class="form-message" aria-live="polite"></p></section>`;
   const discussion = `<section class="book-discussion" aria-labelledby="bookDiscussionHeading"><h3 id="bookDiscussionHeading">Club discussion</h3><p class="catalog-meta">Leave a note, reply to another reader, or tuck spoilers safely behind a warning.</p><div id="bookCommentList" class="book-comment-list">${renderCommentList(state.legacyBookComments)}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><div id="bookReplyContext" class="reply-context" hidden><span id="bookReplyLabel"></span><button type="button" class="text-button" data-cancel-reply>Cancel reply</button></div><label id="bookCommentFormLabel" for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><div class="comment-options"><label class="spoiler-toggle"><input id="bookCommentSpoiler" type="checkbox"> Hide this note as a spoiler</label><label id="bookSpoilerScopeLabel" hidden>Spoiler label (optional)<input id="bookSpoilerScope" maxlength="80" placeholder="For example: ending or chapter 12"></label></div><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can read everything here, then join the discussion after signing in.</p>'}</section>`;
   const reroll = !personal && state.randomPickerActive ? '<button type="button" class="button button-quiet surprise-again" data-surprise-again>🎲 Pick another book</button>' : "";
-  const publicDetails = `${reroll}${pageCountValue(book.pageCount) ? `<p class="catalog-meta">${pageCountValue(book.pageCount).toLocaleString()} pages in this edition</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${publicEditor}`;
+  const addToShelf = `<form id="clubShelfForm" class="club-shelf-form"><label>Add to my shelf<select aria-label="Choose my shelf">${shelfStatusOptions("want-to-read")}</select></label><button class="button" type="submit">${isMember() ? "Add to my shelf" : "Sign in to add"}</button><p class="form-message" role="status" aria-live="polite"></p></form>`;
+  const publicDetails = `${addToShelf}${reroll}${pageCountValue(book.pageCount) ? `<p class="catalog-meta">${pageCountValue(book.pageCount).toLocaleString()} pages in this edition</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${book.why ? `<p><strong>Why this member recommends it</strong><br>${escapeHtml(book.why)}</p>` : '<div id="legacyRecommendation"></div>'}${book.memberName || book.name ? `<p class="book-recommender">Recommended by ${escapeHtml(book.memberName || book.name)}</p>` : ""}${book.memberId ? `<button type="button" class="text-button recommender-link" data-member-id="${escapeHtml(book.memberId)}">View this reader’s library</button>` : ""}${publicEditor}`;
   ui.bookContent.innerHTML = `<div class="book-detail"><div class="book-detail-cover">${coverMarkup({ ...book, title })}</div><div><p class="eyebrow">${personal ? "FROM A MEMBER LIBRARY" : "FROM THE MEMBER BOOKSHELF"}</p><h2>${escapeHtml(title)}</h2><p class="book-byline">by ${escapeHtml(book.author || "Unknown author")}</p>${book.genre ? `<span class="book-tag">${escapeHtml(book.genre)}</span>` : ""}${personal ? personalDetails : publicDetails}</div>${personal ? "" : `<div class="book-conversation">${reactions}${discussion}</div>`}</div>`;
   if (!ui.bookDialog.open) showDialog(ui.bookDialog);
+  $("clubShelfForm")?.addEventListener("submit", (event) => addClubBookToShelf(event, book));
   $("detailShelfStatusForm")?.addEventListener("submit", (event) => updateShelfStatus(event, book.id));
   $("favoriteToggle")?.addEventListener("click", () => toggleFavorite(book.id));
   $("removeShelfBook")?.addEventListener("click", () => removeShelfBook(book.id, title));
