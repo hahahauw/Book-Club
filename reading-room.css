@@ -203,3 +203,11 @@ body:has(#memoryPhotoDialog[open]) { overflow:hidden; }
 @media(max-width:700px) { .library-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } .library-controls label:first-child { grid-column:1/-1; } }
 
 .personal-entry-form [data-completion-label][hidden] { display:none; }
+
+/* Memories organization */
+.memory-group-control { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px; }
+.memory-group-control select { min-height: 44px; }
+.memories-grid.is-grouped { display: block; }
+.memory-group { margin-bottom: 40px; }
+.memory-group > h3 { overflow-wrap: anywhere; margin-bottom: 16px; }
+.memory-group > h3 small { color: var(--muted); font: 14px var(--font-body, sans-serif); }
