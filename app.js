@@ -895,8 +895,42 @@ function memoryAssociationMarkup(memory) {
   const eventTitle = memory.eventId ? (event?.title || memory.eventTitleSnapshot || "") : "", bookTitle = memory.bookId ? (book?.title || memory.bookTitleSnapshot || "") : "";
   return `${eventTitle ? `<button type="button" class="memory-link" data-event-jump="${escapeHtml(memory.eventId || "")}">Event: ${escapeHtml(eventTitle)}</button>` : ""}${bookTitle ? (book ? `<button type="button" class="memory-link" data-book-id="${escapeHtml(book.id)}">Book: ${escapeHtml(bookTitle)}</button>` : `<span class="memory-association">Book: ${escapeHtml(bookTitle)}</span>`) : ""}`;
 }
+function updateMemoryView(scroll = true) {
+  const memoriesOpen = location.hash === "#memories";
+  const home = $("homeContent"), gallery = $("memories");
+  const switched = home.hidden !== memoriesOpen;
+  home.hidden = memoriesOpen;
+  gallery.hidden = !memoriesOpen;
+  if (switched && !memoriesOpen) requestAnimationFrame(updateShelfNavigation);
+  document.querySelectorAll('.desktop-nav a,.mobile-nav a').forEach((link) => {
+    if (link.getAttribute("href") === (location.hash || "#top")) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  if (!scroll) return;
+  if (memoriesOpen) {
+    $("memoriesHeading").focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: "instant" });
+  } else if (switched) {
+    let id = "top";
+    try { id = decodeURIComponent(location.hash.slice(1)) || "top"; } catch {}
+    ($(id) || $("top")).scrollIntoView({ block: "start", behavior: "instant" });
+  }
+}
+function openMemoryPhoto(memoryId) {
+  const memory = state.memories.find((item) => item.id === memoryId);
+  if (!memory) { toast("That photo is no longer available."); return; }
+  if (location.hash !== "#memories") location.hash = "memories";
+  updateMemoryView(false);
+  const url = safeImageUrl(memory.imageUrl);
+  $("memoryPhotoTitle").textContent = memory.title || "Club memory";
+  $("memoryPhotoContent").innerHTML = url ? `<img src="${escapeHtml(optimizedImageUrl(url, 2000))}" alt="${escapeHtml(memory.title || "Club memory")}" decoding="async" referrerpolicy="no-referrer"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open original photo in a new tab</a>` : '<p role="status">This photo is unavailable.</p>';
+  const dialog = $("memoryPhotoDialog");
+  if (!dialog.open) showDialog(dialog);
+  state.memoryPhotoTrigger = $(`memory-${memoryId}`)?.querySelector(".memory-photo") || $("memoriesHeading");
+  state.lastDialogTrigger = state.memoryPhotoTrigger;
+}
 function renderMemories() {
-  ui.memories.innerHTML = state.memories.length ? recentFirst(state.memories).map((memory) => `<article id="memory-${escapeHtml(memory.id)}" class="memory"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 800))}" alt="${escapeHtml(memory.title)}" loading="lazy" decoding="async" width="800" height="540"><div><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3>${memoryAssociationMarkup(memory)}</div>${isOfficer() ? `<div class="memory-link-controls"><button type="button" data-edit-memory="${escapeHtml(memory.id)}">Edit</button></div><button class="remove-button" type="button" data-remove-memory="${escapeHtml(memory.id)}" aria-label="Remove memory">×</button>` : ""}</article>`).join("") : '<p class="empty-state">The club’s first reading memory will appear here soon.</p>';
+  ui.memories.innerHTML = state.memories.length ? recentFirst(state.memories).map((memory) => `<article id="memory-${escapeHtml(memory.id)}" class="memory"><button type="button" class="memory-photo" data-memory-focus="${escapeHtml(memory.id)}" aria-label="Open full photo: ${escapeHtml(memory.title || "Club memory")}"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 1200))}" alt="${escapeHtml(memory.title || "Club memory")}" loading="lazy" decoding="async" width="1200" height="900"></button><div class="memory-caption"><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3>${memoryAssociationMarkup(memory)}</div>${isOfficer() ? `<div class="memory-link-controls"><button type="button" data-edit-memory="${escapeHtml(memory.id)}">Edit</button></div><button class="remove-button" type="button" data-remove-memory="${escapeHtml(memory.id)}" aria-label="Remove memory">×</button>` : ""}</article>`).join("") : '<p class="empty-state">The club’s first reading memory will appear here soon.</p>';
   renderEvents();
 }
 function resetMemoryEditor() {
@@ -1440,9 +1474,16 @@ document.addEventListener("click", async (event) => {
   const memoryEdit = event.target.closest("[data-edit-memory]");
   if (memoryEdit) editMemory(memoryEdit.dataset.editMemory);
   const memoryFocus = event.target.closest("[data-memory-focus]");
-  if (memoryFocus) { const target = $(`memory-${memoryFocus.dataset.memoryFocus}`); target?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); target?.animate?.([{ outlineColor: "transparent" }, { outlineColor: "var(--orange)" }, { outlineColor: "transparent" }], { duration: 1300 }); }
+  if (memoryFocus) openMemoryPhoto(memoryFocus.dataset.memoryFocus);
   const eventJump = event.target.closest("[data-event-jump]");
-  if (eventJump?.dataset.eventJump) $(`event-${eventJump.dataset.eventJump}`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  if (eventJump?.dataset.eventJump) {
+    const target = $(`event-${eventJump.dataset.eventJump}`);
+    if (target) {
+      location.hash = "events"; updateMemoryView(false);
+      const archive = target.closest("details"); if (archive) archive.open = true;
+      requestAnimationFrame(() => target.scrollIntoView({ block: "center" }));
+    } else toast("That event is no longer available.");
+  }
   const catalogResult = event.target.closest("[data-catalog-result]");
   if (catalogResult) await selectCatalogBook(Number(catalogResult.dataset.catalogResult));
   const monthDescriptionToggle = event.target.closest("[data-toggle-month-description]");
@@ -1497,6 +1538,10 @@ async function retryCoverImage(image) {
 document.addEventListener("error", async (event) => {
   const image = event.target;
   if (!(image instanceof HTMLImageElement)) return;
+  if (image.closest("#memoryPhotoContent")) {
+    const fallback = document.createElement("p"); fallback.setAttribute("role", "status");
+    fallback.textContent = "The photo could not load. Try the original photo link below."; image.replaceWith(fallback); return;
+  }
   if (image.dataset.coverTitle && await retryCoverImage(image)) return;
   const text = image.alt.replace(/^(Cover of|Portrait of)\s+/i, "") || "Image unavailable";
   const fallback = document.createElement("span");
@@ -1509,3 +1554,12 @@ document.addEventListener("error", async (event) => {
   fallback.textContent = text;
   image.replaceWith(fallback);
 }, true);
+
+window.addEventListener("hashchange", () => updateMemoryView());
+$("memoryPhotoDialog").addEventListener("close", () => {
+  $("memoryPhotoContent").replaceChildren();
+  const target = state.memoryPhotoTrigger;
+  if (!$("memories").hidden) (target?.isConnected ? target : $("memoriesHeading")).focus({ preventScroll: true });
+  state.memoryPhotoTrigger = null;
+});
+updateMemoryView(false);

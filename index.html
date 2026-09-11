@@ -9,17 +9,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=14">
-  <link rel="stylesheet" href="reading-room.css?v=4">
+  <link rel="stylesheet" href="reading-room.css?v=5">
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Book Enthusiasts Club home"><span class="brand-mark">B</span><span>Book Enthusiasts<br>Club</span></a>
-    <nav class="desktop-nav" aria-label="Main navigation"><a href="#shelf">Club shelf</a><a href="#discovery">Discover</a><a href="#events">Club life</a><a href="#members">Members</a></nav>
+    <nav class="desktop-nav" aria-label="Main navigation"><a href="#shelf">Club shelf</a><a href="#discovery">Discover</a><a href="#events">Events</a><a href="#memories">Memories</a><a href="#members">Members</a></nav>
     <div class="auth-area"><button id="themeButton" type="button" class="button button-quiet">Dark mode</button><button id="notificationButton" type="button" class="button button-quiet notification-button" aria-haspopup="dialog" aria-label="Notifications" hidden><span class="notification-symbol" aria-hidden="true">🔔</span><span class="notification-label">Updates</span><span id="notificationBadge" class="notification-badge" hidden>0</span></button><span id="authStatus" aria-live="polite">Exploring as a guest</span><button id="signInButton" type="button" class="button button-quiet">Member sign in</button><button id="profileButton" type="button" class="button button-quiet" hidden>My library</button><button id="signOutButton" type="button" class="button button-quiet" hidden>Sign out</button></div>
   </header>
 
   <a class="skip-link" href="#shelf">Skip to club shelf</a>
   <main id="top">
+    <div id="homeContent">
     <section class="hero shell">
       <p class="eyebrow">EST. 2026 · A CLUB FOR CURIOUS READERS</p>
       <h1>A good book<br>is better <em>together.</em></h1>
@@ -82,7 +83,6 @@
 
     <section id="events" class="shell split-section" aria-labelledby="eventsHeading">
       <div><div class="section-label"><span>03</span><h2 id="eventsHeading">Club Events</h2></div><p class="section-copy">See what is coming up, revisit past club days, and let us know if you can join.</p><div id="eventsList" class="events-list"><p class="empty-state">Events will appear here.</p></div><form id="eventForm" class="officer-panel stacked-form" hidden><label>Event title <input id="eventTitle" maxlength="100" required></label><label>Date <input id="eventDate" type="date" required></label><label>Details <input id="eventDetails" maxlength="180"></label><button class="button" type="submit">Add event</button></form></div>
-      <div><div class="section-label"><span>04</span><h2>Reading Memories</h2></div><p class="section-copy">The moments between the pages, now connected to the events and books behind them.</p><div id="memoriesGrid" class="memories-grid"><p class="empty-state">Reading memories will appear here.</p></div><form id="memoryForm" class="officer-panel stacked-form memory-edit-form" hidden><input id="memoryEditId" type="hidden"><label>Hosted image URL <input id="memoryImage" type="url" maxlength="500" placeholder="Paste a link, or upload a file below"></label><label>Upload a photo <input id="memoryFile" type="file" accept="image/*"></label><label>Caption <input id="memoryCaption" maxlength="100" required></label><label>Category <input id="memoryCategory" maxlength="50"></label><label>Related event (optional) <select id="memoryEvent"><option value="">No event selected</option></select></label><label>Related club book (optional) <select id="memoryBook"><option value="">No book selected</option></select></label><div class="memory-form-actions"><button id="memorySaveButton" class="button" type="submit">Add memory</button><button id="memoryCancelEdit" class="button button-quiet" type="button" hidden>Cancel edit</button></div><span id="memoryStatus" class="form-message" aria-live="polite"></span></form></div>
     </section>
 
     <section id="board" class="shell board-section" aria-labelledby="boardHeading"><div class="section-label"><span>05</span><h2 id="boardHeading">The Club Pinboard</h2></div><p class="section-copy">Quotes, tiny reactions, and thoughts worth leaving between library visits.</p><form id="boardForm" class="board-form" hidden><label for="boardText">Pin a short note</label><textarea id="boardText" maxlength="280" placeholder="What’s on your reading mind?" required></textarea><button class="button" type="submit">Pin note</button><span id="boardStatus" class="form-message" aria-live="polite"></span></form><p id="boardGuestHint" class="action-hint">Everyone can read the pinboard. Invited members can add a note after signing in.</p><div id="pinBoard" class="pin-board"><p class="empty-state loading-state">Opening the pinboard…</p></div></section>
@@ -94,11 +94,17 @@
       <form id="inviteForm" class="officer-panel" hidden><label>Invite an approved member <input id="inviteEmail" type="email" required placeholder="reader@example.com"></label><button class="button" type="submit">Approve email</button></form>
       <form id="uploadSettingsForm" class="officer-panel upload-settings" hidden><div><p class="eyebrow">OFFICER INTEGRATIONS</p><p>Save this club’s unsigned Cloudinary preset so members can upload covers and avatars. A referrer-restricted Google Books key enables the second search catalogue. Never paste a private Cloudinary API secret here.</p></div><label>Cloudinary cloud name <input id="cloudName" maxlength="100" placeholder="e.g., bookclub"></label><label>Unsigned upload preset <input id="uploadPreset" maxlength="100" value="bookclub_unsigned"></label><label>Google Books API key <input id="googleBooksKey" maxlength="200" autocomplete="off" placeholder="Optional, restrict it to this site"></label><button class="button" type="submit">Save integrations</button><span id="uploadSettingsStatus" class="form-message" aria-live="polite"></span></form>
     </section>
+    </div>
+    <section id="memories" class="shell memories-page" aria-labelledby="memoriesHeading" hidden>
+      <div class="section-label"><span>04</span><h2 id="memoriesHeading" tabindex="-1">Club Memories</h2></div><p class="section-copy">Open a photo to see the full moment.</p><div id="memoriesGrid" class="memories-grid"><p class="empty-state">Reading memories will appear here.</p></div><form id="memoryForm" class="officer-panel stacked-form memory-edit-form" hidden><input id="memoryEditId" type="hidden"><label>Hosted image URL <input id="memoryImage" type="url" maxlength="500" placeholder="Paste a link, or upload a file below"></label><label>Upload a photo <input id="memoryFile" type="file" accept="image/*"></label><label>Caption <input id="memoryCaption" maxlength="100" required></label><label>Category <input id="memoryCategory" maxlength="50"></label><label>Related event (optional) <select id="memoryEvent"><option value="">No event selected</option></select></label><label>Related club book (optional) <select id="memoryBook"><option value="">No book selected</option></select></label><div class="memory-form-actions"><button id="memorySaveButton" class="button" type="submit">Add memory</button><button id="memoryCancelEdit" class="button button-quiet" type="button" hidden>Cancel edit</button></div><span id="memoryStatus" class="form-message" aria-live="polite"></span></form>
+    </section>
   </main>
 
   <footer class="site-footer"><p>Book Enthusiasts Club</p><p>Made for sharing stories.</p></footer>
 
-  <nav class="mobile-nav" aria-label="Mobile navigation"><a href="#top"><span aria-hidden="true">⌂</span>Home</a><a href="#shelf"><span aria-hidden="true">▤</span>Books</a><a href="#events"><span aria-hidden="true">◇</span>Events</a><a href="#members"><span aria-hidden="true">♧</span>Members</a></nav>
+  <nav class="mobile-nav" aria-label="Mobile navigation"><a href="#top"><span aria-hidden="true">⌂</span>Home</a><a href="#shelf"><span aria-hidden="true">▤</span>Books</a><a href="#events"><span aria-hidden="true">◇</span>Events</a><a href="#memories"><span aria-hidden="true">▧</span>Memories</a><a href="#members"><span aria-hidden="true">♧</span>Members</a></nav>
+
+  <dialog id="memoryPhotoDialog" class="dialog memory-photo-dialog" aria-labelledby="memoryPhotoTitle"><article class="dialog-card memory-photo-card"><button type="button" class="close-dialog" data-close="memoryPhotoDialog" aria-label="Close photo">×</button><h2 id="memoryPhotoTitle"></h2><div id="memoryPhotoContent"></div></article></dialog>
 
   <dialog id="suggestionDialog" class="dialog" aria-labelledby="suggestionDialogTitle"><form id="suggestionForm" class="dialog-card"><button class="close-dialog" type="button" data-close="suggestionDialog" aria-label="Close">×</button><p class="eyebrow">ADD TO THE CONVERSATION</p><h2 id="suggestionDialogTitle">Suggest a book</h2><label>Your name <input id="suggestName" maxlength="60" required></label><label>Book title <input id="suggestTitle" maxlength="160" required></label><label>Author <input id="suggestAuthor" maxlength="100" required></label><label>Genre <input id="suggestGenre" maxlength="80"></label><label>Page count (optional) <input id="suggestPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Use the published edition’s page count"></label><label>Cover image URL <input id="suggestCover" type="url" maxlength="500" placeholder="Optional"></label><label>Why should others read this? <textarea id="suggestWhy" maxlength="800"></textarea></label><button class="button" type="submit">Send suggestion</button><p id="suggestionMessage" class="form-message" aria-live="polite"></p></form></dialog>
 
@@ -110,6 +116,6 @@
   <dialog id="notificationDialog" class="dialog" aria-labelledby="notificationDialogTitle"><article class="dialog-card notification-dialog-card"><button class="close-dialog" type="button" data-close="notificationDialog" aria-label="Close">×</button><div class="notification-header"><div><p class="eyebrow">YOUR CLUB UPDATES</p><h2 id="notificationDialogTitle">Notifications</h2></div><button id="markNotificationsRead" type="button" class="text-button">Mark all as read</button></div><p class="catalog-intro">Direct replies and important club updates appear here—nothing noisy.</p><div id="notificationList" class="notification-list" aria-busy="true"><span class="skeleton skeleton-activity" aria-hidden="true"></span><span class="skeleton skeleton-activity" aria-hidden="true"></span></div><p id="notificationStatus" class="form-message" aria-live="polite"></p></article></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" popover="manual"></div>
-  <script type="module" src="app.js?v=18"></script>
+  <script type="module" src="app.js?v=19"></script>
 </body>
 </html>
