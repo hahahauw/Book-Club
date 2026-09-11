@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const functions = source.slice(source.indexOf('function updateMemoryView('), source.indexOf('function resetMemoryEditor('));
 function setup(hash = '') {
   const nodes = {};
-  for (const id of ['homeContent','memories','memoriesHeading','top','events','memoryPhotoTitle','memoryPhotoContent','memoryPhotoDialog']) nodes[id] = { hidden: id === 'memories', focused: false, scrolled: false, focus() { this.focused = true; }, scrollIntoView() { this.scrolled = true; } };
+  for (const id of ['homeContent','memories','memoriesHeading','top','events','memoryPhotoTitle','memoryPhotoContent','memoryPhotoDialog','memoryPhotoNavigation']) nodes[id] = { hidden: id === 'memories', focused: false, scrolled: false, focus() { this.focused = true; }, scrollIntoView() { this.scrolled = true; } };
   const links = ['#top','#memories','#events'].map(href => ({ href, getAttribute() { return href; }, setAttribute(_, value) { this.current = value; }, removeAttribute() { delete this.current; } }));
   let shown = 0; let notices = [];
   const context = vm.createContext({ $, location: { hash }, document: { querySelectorAll: () => links }, window: { scrollTo() {} },
@@ -55,4 +55,12 @@ test('gallery is outside homepage wrapper with desktop and mobile entry points',
   assert.equal((html.match(/id="memoryForm"/g) || []).length, 1);
   assert.equal((html.match(/id="memoriesGrid"/g) || []).length, 1);
   assert.match(html, /<dialog id="memoryPhotoDialog"[^>]+aria-labelledby="memoryPhotoTitle"/);
+});
+
+test('photo navigation follows gallery order and stops at boundaries', () => {
+ const h=setup('#memories');h.context.state.memories=[{id:'a',imageUrl:'https://x/a'},{id:'b',imageUrl:'https://x/b'}];
+ h.context.openMemoryPhoto('a');assert.match(h.nodes.memoryPhotoNavigation.innerHTML,/1 of 2/);
+ h.context.moveMemoryPhoto(-1);assert.equal(h.context.state.activeMemoryPhotoId,'a');
+ h.context.moveMemoryPhoto(1);assert.equal(h.context.state.activeMemoryPhotoId,'b');assert.match(h.nodes.memoryPhotoNavigation.innerHTML,/2 of 2/);
+ h.context.moveMemoryPhoto(1);assert.equal(h.context.state.activeMemoryPhotoId,'b');
 });
