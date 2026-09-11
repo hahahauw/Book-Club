@@ -295,6 +295,7 @@ function renderNotifications() {
 }
 function syncNotificationSubscription() {
   if (!isMember()) {
+    state.monthDrafts?.clear();
     state.stopNotifications?.(); state.stopNotifications = null; state.notifications = []; renderNotifications(); return;
   }
   if (state.stopNotifications) return;
@@ -342,7 +343,11 @@ async function openNotificationTarget(id) {
   const notification = state.notifications.find((item) => item.id === id); if (!notification) return;
   await markNotificationRead(id); closeDialog(ui.notificationDialog);
   if (notification.type === "discussion_reply") { const book = state.books.find((item) => item.id === notification.bookId); if (book) { state.randomPickerActive = false; openBookDetails(book); requestAnimationFrame(() => $("bookCommentList")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })); } else toast("That book is no longer on the public shelf."); return; }
-  const target = notification.type === "book_of_month_changed" ? $("monthHeading") : notification.type === "announcement_updated" ? $("announcementHeading") : $("events");
+  const sectionId = notification.type === "book_of_month_changed" ? "monthHeading" : notification.type === "announcement_updated" ? "announcementHeading" : "events";
+  location.hash = sectionId;
+  updateMemoryView(false);
+  const target = notification.type === "event_added" ? ($(`event-${notification.eventId}`) || $(sectionId)) : $(sectionId);
+  const archive = target?.closest("details"); if (archive) archive.open = true;
   requestAnimationFrame(() => target?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
 }
 
@@ -522,6 +527,26 @@ async function reviewPending(id, approve) {
 }
 
 function currentBook() { return state.books.find((book) => book.id === state.currentPickId); }
+function monthDraftKey() { return JSON.stringify([state.user?.uid || "", currentBook()?.id || ""]); }
+function rememberMonthDraft() {
+  if (!isMember() || !currentBook()) return;
+  state.monthDrafts ||= new Map();
+  const draft = { stars: ui.monthStars.value, finished: ui.monthFinished.checked, comment: ui.monthComment.value, dirty: true };
+  state.monthDrafts.set(monthDraftKey(), draft);
+  return draft;
+}
+function syncMonthForm(mine) {
+  const key = monthDraftKey();
+  let draft = state.monthDrafts?.get(key);
+  if (draft && !draft.dirty && mine && Number(draft.stars) === Number(mine.stars) && draft.finished === Boolean(mine.finished) && draft.comment.trim() === String(mine.comment || "")) {
+    state.monthDrafts.delete(key); draft = null;
+  }
+  const value = draft || mine;
+  ui.monthStars.value = value ? String(value.stars || "") : "";
+  ui.monthFinished.checked = Boolean(value?.finished);
+  ui.monthComment.value = value?.comment || "";
+  if (state.monthFormKey !== key) { ui.monthMessage.textContent = ""; state.monthFormKey = key; }
+}
 function renderMonth() {
   const book = currentBook();
   if (!book) { ui.month.innerHTML = '<div class="month-cover placeholder-cover">The next<br>club read</div><div><p class="eyebrow">CHOSEN BY THE CLUB</p><h3>Waiting for the next chapter.</h3><p>When an officer chooses a book from the shelf, it will appear here with reader progress and discussion.</p></div>'; ui.monthCommunity.hidden = true; return; }
@@ -538,8 +563,7 @@ function renderMonth() {
   ui.monthRating.textContent = average ? `★ ${average}/5 · ${count} ${count === 1 ? "rating" : "ratings"}` : "No ratings yet";
   ui.monthProgress.textContent = count ? `${finished} of ${count} responding readers finished` : "No reading updates yet";
   const mine = state.ratings.find((item) => item.memberId === state.user?.uid);
-  if (mine) { ui.monthStars.value = String(mine.stars || 5); ui.monthFinished.checked = Boolean(mine.finished); ui.monthComment.value = mine.comment || ""; }
-  else { ui.monthStars.value = "5"; ui.monthFinished.checked = false; ui.monthComment.value = ""; }
+  syncMonthForm(mine);
   ui.monthNotes.innerHTML = state.ratings.filter((item) => item.comment).length ? state.ratings.filter((item) => item.comment).map((item) => `<article class="month-note"><strong>${escapeHtml(item.displayName || "Club member")}</strong><span>${"★".repeat(Number(item.stars || 0))}</span><p>${escapeHtml(item.comment)}</p></article>`).join("") : '<p class="empty-state">No discussion notes yet. Be the first to leave one.</p>';
 }
 function subscribeRatings() { state.stopRatings?.(); state.ratings = []; state.dashboardRatings = []; const book = currentBook(); if (!book) { renderDashboard(); return renderMonth(); } state.stopRatings = onSnapshot(collection(db, "bookOfMonthRatings", book.id, "members"), (snapshot) => { state.ratings = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.dashboardRatings = isMember() ? state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: book.id })) : []; renderMonth(); renderDashboard(); }, () => { ui.monthNotes.innerHTML = '<p class="empty-state">Ratings are unavailable right now.</p>'; state.dashboardRatings = []; renderDashboard(); }); }
@@ -769,18 +793,25 @@ async function submitSuggestion(event) {
 async function saveRating(event) {
   event.preventDefault(); const book = currentBook(); if (!book) return;
   if (!isMember()) { ui.monthMessage.textContent = "Sign in with an invited member account to save an update."; return; }
+  const stars = Number(ui.monthStars.value);
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) { ui.monthMessage.textContent = "Choose a rating before saving your update."; ui.monthStars.focus(); return; }
+  const uid = state.user.uid, key = monthDraftKey(), draft = rememberMonthDraft();
+  const previous = state.ratings.find((item) => item.memberId === uid);
+  const update = { memberId: uid, displayName: state.profile.displayName, stars, finished: draft.finished, comment: draft.comment.trim(), updatedAt: new Date().toISOString() };
+  if (previous && Number(previous.stars) === stars && Boolean(previous.finished) === update.finished && String(previous.comment || "") === update.comment) { draft.dirty = false; ui.monthMessage.textContent = "Nothing changed — your last update is already saved."; return; }
   const button = event.currentTarget.querySelector("button[type=submit]");
   await runBusy(button, "Saving…", async () => {
     try {
-      const previous = state.ratings.find((item) => item.memberId === state.user.uid);
-      const update = { memberId: state.user.uid, displayName: state.profile.displayName, stars: Number(ui.monthStars.value), finished: ui.monthFinished.checked, comment: ui.monthComment.value.trim(), updatedAt: new Date().toISOString() };
-      if (previous && Number(previous.stars) === update.stars && Boolean(previous.finished) === update.finished && String(previous.comment || "") === update.comment) { ui.monthMessage.textContent = "Nothing changed — your last update is already saved."; return; }
-      await setDoc(doc(db, "bookOfMonthRatings", book.id, "members", state.user.uid), update);
+      await setDoc(doc(db, "bookOfMonthRatings", book.id, "members", uid), update);
+      const unchangedDraft = state.monthDrafts?.get(key) === draft;
+      if (unchangedDraft) draft.dirty = false;
+      if (monthDraftKey() === key) ui.monthMessage.textContent = unchangedDraft ? "Your update is saved." : "Your earlier update was saved. Your newer edits are not saved yet.";
       const type = update.finished && !previous?.finished ? "finished_book" : update.comment && update.comment !== String(previous?.comment || "") ? "discussed_book" : "rated_book";
-      await recordActivity(type, book, { publicBookId: book.id, stars: update.stars, key: `month_${book.id}_${type}` });
-      ui.monthMessage.textContent = "Your update is saved.";
+      if (state.user?.uid === uid) await recordActivity(type, book, { publicBookId: book.id, stars: update.stars, key: `month_${book.id}_${type}` });
+    } catch (error) {
+      console.error(error);
+      if (monthDraftKey() === key) ui.monthMessage.textContent = "Could not save your update. Your draft is still here; try again.";
     }
-    catch (error) { console.error(error); ui.monthMessage.textContent = "Could not save your update."; }
   });
 }
 async function saveMonth() {
@@ -1256,7 +1287,7 @@ function openBookDetails(book, personal = false) {
   const isFavorite = canEditShelf && (state.profile?.favoriteBookIds || []).includes(book.id);
   const shelfEditor = canEditShelf ? `<button id="favoriteToggle" type="button" class="favorite-toggle${isFavorite ? " is-favorite" : ""}" aria-pressed="${String(isFavorite)}">${isFavorite ? "Remove from my Top 3" : "Add to my Top 3"}</button><form id="detailShelfStatusForm" class="book-status-form"><label>Move this book to <select id="detailShelfStatus">${shelfStatusOptions(book.status || "reading")}</select></label><button class="button" type="submit">Update status</button><button id="removeShelfBook" class="text-button danger-button" type="button">Remove from my shelf</button><p id="bookDetailMessage" class="form-message" aria-live="polite"></p></form>` : "";
   const publicEditor = canEditPublic ? `<form id="bookEditForm" class="book-edit-form"><h3>Officer book details</h3><label>Title <input id="bookEditTitle" maxlength="160" value="${escapeHtml(title)}" required></label><label>Author <input id="bookEditAuthor" maxlength="100" value="${escapeHtml(book.author || "")}" required></label><label>Genre <input id="bookEditGenre" maxlength="80" value="${escapeHtml(book.genre || "")}"></label><label>Page count <input id="bookEditPages" type="number" min="1" max="10000" inputmode="numeric" value="${pageCountValue(book.pageCount) || ""}" placeholder="Optional"></label><label>Cover URL <input id="bookEditCover" type="url" maxlength="500" value="${escapeHtml(book.coverUrl || "")}"></label><label>Or upload a cover <input id="bookEditCoverFile" type="file" accept="image/*"></label><label>About the book <textarea id="bookEditSynopsis" maxlength="3000">${escapeHtml(about)}</textarea></label><button class="button" type="submit">Save book details</button><p id="bookEditMessage" class="form-message" aria-live="polite"></p></form>` : "";
-  const personalDetails = `<p><strong>${escapeHtml(String(book.status || "reading").replace(/-/g, " "))}</strong>${pageCountValue(book.pageCount) ? ` · ${pageCountValue(book.pageCount).toLocaleString()} pages` : ""}</p>${book.note ? `<p><strong>Reader’s note</strong><br>${escapeHtml(book.note)}</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${shelfEditor}`;
+  const personalDetails = `<p><strong id="detailShelfStatusLabel">${escapeHtml(String(book.status || "reading").replace(/-/g, " "))}</strong>${pageCountValue(book.pageCount) ? ` · ${pageCountValue(book.pageCount).toLocaleString()} pages` : ""}</p>${book.note ? `<p><strong>Reader’s note</strong><br>${escapeHtml(book.note)}</p>` : ""}${about ? `<p><strong>About the book</strong><br>${escapeHtml(about)}</p>` : ""}${shelfEditor}`;
   if (!personal) { state.activeBookId = book.id; state.legacyBookComments = normalizeLegacyComments(book.comments || []); }
   const reactions = `<section class="book-reactions" aria-labelledby="reactionHeading"><div><h3 id="reactionHeading">Quick reactions</h3><p>A small pulse-check from club readers. Each member gets one reaction per book.</p></div><div id="reactionSummary" class="reaction-summary" aria-live="polite"><p class="empty-state">Loading reactions…</p></div><div id="reactionPicker" class="reaction-picker"></div><p id="reactionStatus" class="form-message" aria-live="polite"></p></section>`;
   const discussion = `<section class="book-discussion" aria-labelledby="bookDiscussionHeading"><h3 id="bookDiscussionHeading">Club discussion</h3><p class="catalog-meta">Leave a note, reply to another reader, or tuck spoilers safely behind a warning.</p><div id="bookCommentList" class="book-comment-list">${renderCommentList(state.legacyBookComments)}</div>${isMember() ? '<form id="bookCommentForm" class="book-comment-form"><div id="bookReplyContext" class="reply-context" hidden><span id="bookReplyLabel"></span><button type="button" class="text-button" data-cancel-reply>Cancel reply</button></div><label id="bookCommentFormLabel" for="bookCommentText">Add a note</label><textarea id="bookCommentText" maxlength="500" placeholder="A thought, question, or reaction…" required></textarea><div class="comment-options"><label class="spoiler-toggle"><input id="bookCommentSpoiler" type="checkbox"> Hide this note as a spoiler</label><label id="bookSpoilerScopeLabel" hidden>Spoiler label (optional)<input id="bookSpoilerScope" maxlength="80" placeholder="For example: ending or chapter 12"></label></div><button class="button" type="submit">Post note</button><p id="bookCommentMessage" class="form-message" aria-live="polite"></p></form>' : '<p class="form-message">Invited members can read everything here, then join the discussion after signing in.</p>'}</section>`;
@@ -1341,7 +1372,9 @@ async function updateShelfStatus(event, entryId) {
   const entry = state.shelfEntries.find((item) => item.id === entryId);
   if (!status || !entry) return;
   if (entry.status === status) { $("bookDetailMessage").textContent = "That book is already in this reading section."; return; }
-  const button = event.currentTarget.querySelector("button[type=submit]");
+  const form = event.currentTarget, ownerId = state.user.uid;
+  const message = $("bookDetailMessage"), label = $("detailShelfStatusLabel");
+  const button = form.querySelector("button[type=submit]");
   await runBusy(button, "Updating…", async () => {
     try {
       const updates = {
@@ -1353,13 +1386,17 @@ async function updateShelfStatus(event, entryId) {
         date: entry.date || new Date().toISOString()
       };
       if (status === "read") updates.completedAt = serverTimestamp();
-      await setDoc(doc(db, "memberShelves", state.openProfileId, "entries", entryId), updates, { merge: true });
-      await recordActivity(activityTypeForStatus(status), { ...entry, status }, { shelfEntryId: entryId, key: `${entryId}_${status}` });
-      $("bookDetailMessage").textContent = "Reading status updated for everyone who views your shelf.";
+      await setDoc(doc(db, "memberShelves", ownerId, "entries", entryId), updates, { merge: true });
+      entry.status = status;
+      if ($("detailShelfStatusForm") === form && state.user?.uid === ownerId) {
+        if (label) label.textContent = status.replace(/-/g, " ");
+        message.textContent = "Reading status updated.";
+      }
+      if (state.user?.uid === ownerId) await recordActivity(activityTypeForStatus(status), { ...entry, status }, { shelfEntryId: entryId, key: `${entryId}_${status}` });
       toast("Reading status updated.");
     } catch (error) {
       console.error(error);
-      $("bookDetailMessage").textContent = "Could not update that status.";
+      if ($("detailShelfStatusForm") === form) message.textContent = "Could not update that status. Try again.";
     }
   });
 }
@@ -1563,3 +1600,6 @@ $("memoryPhotoDialog").addEventListener("close", () => {
   state.memoryPhotoTrigger = null;
 });
 updateMemoryView(false);
+
+ui.monthForm.addEventListener("input", rememberMonthDraft);
+ui.monthForm.addEventListener("change", rememberMonthDraft);
