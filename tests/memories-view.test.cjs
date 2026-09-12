@@ -9,6 +9,8 @@ const functions = source.slice(source.indexOf('function updateMemoryView('), sou
 function setup(hash = '') {
   const nodes = {};
   for (const id of ['homeContent','memories','memoriesHeading','top','events','memoryPhotoTitle','memoryPhotoContent','memoryPhotoDialog','memoryPhotoNavigation']) nodes[id] = { hidden: id === 'memories', focused: false, scrolled: false, focus() { this.focused = true; }, scrollIntoView() { this.scrolled = true; } };
+  const navParts = { previous: {focus(){this.focused=true;}}, next: {focus(){this.focused=true;}}, status:{} };
+  nodes.memoryPhotoNavigation.querySelector = selector => selector === '[role="status"]' ? navParts.status : selector.includes('-1') ? navParts.previous : navParts.next;
   const links = ['#top','#memories','#events'].map(href => ({ href, getAttribute() { return href; }, setAttribute(_, value) { this.current = value; }, removeAttribute() { delete this.current; } }));
   let shown = 0; let notices = [];
   const context = vm.createContext({ $, location: { hash }, document: { querySelectorAll: () => links }, window: { scrollTo() {} },
@@ -21,7 +23,7 @@ function setup(hash = '') {
   });
   function $(id) { return nodes[id]; }
   vm.runInContext(functions, context);
-  return { context, nodes, links, shown: () => shown, notices };
+  return { context, nodes, links, navParts, shown: () => shown, notices };
 }
 test('direct Memories route hides the homepage and selects its navigation link', () => {
   const h = setup('#memories'); h.context.updateMemoryView(false);
@@ -59,8 +61,14 @@ test('gallery is outside homepage wrapper with desktop and mobile entry points',
 
 test('photo navigation follows gallery order and stops at boundaries', () => {
  const h=setup('#memories');h.context.state.memories=[{id:'a',imageUrl:'https://x/a'},{id:'b',imageUrl:'https://x/b'}];
- h.context.openMemoryPhoto('a');assert.match(h.nodes.memoryPhotoNavigation.innerHTML,/1 of 2/);
+ h.context.openMemoryPhoto('a');assert.match(h.navParts.status.textContent,/1 of 2/);
  h.context.moveMemoryPhoto(-1);assert.equal(h.context.state.activeMemoryPhotoId,'a');
- h.context.moveMemoryPhoto(1);assert.equal(h.context.state.activeMemoryPhotoId,'b');assert.match(h.nodes.memoryPhotoNavigation.innerHTML,/2 of 2/);
+ h.context.moveMemoryPhoto(1);assert.equal(h.context.state.activeMemoryPhotoId,'b');assert.match(h.navParts.status.textContent,/2 of 2/);
  h.context.moveMemoryPhoto(1);assert.equal(h.context.state.activeMemoryPhotoId,'b');
+});
+
+test('photo controls stay mounted and focus moves away from a disabled boundary',()=>{
+ const h=setup('#memories');h.context.state.memories=[{id:'a',imageUrl:'https://x/a'},{id:'b',imageUrl:'https://x/b'}];
+ h.context.openMemoryPhoto('a');const next=h.navParts.next;h.context.document.activeElement=next;h.context.moveMemoryPhoto(1);
+ assert.equal(h.navParts.next,next);assert.equal(next.disabled,true);assert.equal(h.navParts.previous.focused,true);
 });

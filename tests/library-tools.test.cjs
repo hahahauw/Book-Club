@@ -9,13 +9,20 @@ test('optional completion date accepts real dates and rejects invalid or future 
 function editor(options={}){
  const deleted={delete:true};let write=null;const book={id:'shelf1',title:'Old',author:'Writer',status:'read',catalogKey:'catalog:keep',completedAt:'2000-01-01T12:00:00',pageCount:123};
  const values={title:'Corrected title',author:'Writer',genre:'Fantasy',coverUrl:'',coverFile:'',note:'Updated note',synopsis:'',pageCount:'',completedAt:'' ,...options.values};
- const fields=Object.fromEntries(Object.entries(values).map(([k,value])=>[k,{value,files:[]} ]));const message={textContent:''};const form={isConnected:false,elements:{namedItem:k=>fields[k]},querySelector:selector=>selector==='[role="status"]'?message:{}};
+ const fields=Object.fromEntries(Object.entries(values).map(([k,value])=>[k,{value,files:[]} ]));const message={textContent:''};const elements=Object.values(fields);elements.namedItem=k=>fields[k];const form={isConnected:false,elements,querySelector:selector=>selector==='[role="status"]'?message:{}};
  const state={user:{uid:'owner'},openProfileId:'owner',shelfEntries:[{...book}]};
  const c=base({state,isMember:()=>!!state.user,safeImageUrl:v=>v.startsWith('https://')?v:'',runBusy:async(b,l,fn)=>fn(),deleteField:()=>deleted,db:{},doc:(_, ...p)=>p.join('/'),toast(){},uploadImage:async()=>'',runTransaction:async(_,fn)=>fn({get:async()=>({exists:()=>!options.missing,data:()=>({...book,status:options.status||'read'})}),update:(ref,patch)=>{write={ref,patch}}})});
- return {c,book,state,message,deleted,write:()=>write,run:()=>c.savePersonalEntry({preventDefault(){},currentTarget:form},book)};
+ return {c,book,state,message,deleted,fields,form,write:()=>write,run:()=>c.savePersonalEntry({preventDefault(){},currentTarget:form},book)};
 }
 test('editing updates the same record and clears optional fields without touching identifiers',async()=>{const h=editor();await h.run();assert.equal(h.write().ref,'memberShelves/owner/entries/shelf1');assert.equal(h.write().patch.title,'Corrected title');assert.equal(h.write().patch.pageCount,h.deleted);assert.equal(h.write().patch.completedAt,h.deleted);assert.equal(h.write().patch.catalogKey,undefined);assert.equal(h.state.shelfEntries[0].catalogKey,'catalog:keep');});
 test('unchanged finish date preserves its exact timestamp',async()=>{const h=editor({values:{completedAt:'2000-01-01'}});await h.run();assert.equal(h.write().patch.completedAt,undefined);});
 test('editing cannot recreate a removed entry',async()=>{const h=editor({missing:true});await h.run();assert.equal(h.write(),null);assert.match(h.message.textContent,/removed/);});
 test('a concurrently changed reading status blocks completion-date edits',async()=>{const h=editor({status:'reading'});await h.run();assert.equal(h.write(),null);assert.match(h.message.textContent,/status changed/);});
 test('invalid page counts do not write',async()=>{const h=editor({values:{pageCount:'2.5'}});await h.run();assert.equal(h.write(),null);assert.match(h.message.textContent,/whole number/);});
+
+test('personal editor locks captured fields during save and restores disabled states after failure',async()=>{
+ const h=editor();h.fields.completedAt.disabled=true;h.fields.title.disabled=false;let finish;
+ h.c.runTransaction=()=>new Promise((resolve,reject)=>finish=()=>reject(Error('offline')));
+ const saving=h.run();assert.equal(h.fields.title.disabled,true);assert.equal(h.fields.note.disabled,true);
+ finish();await saving;assert.equal(h.fields.title.disabled,false);assert.equal(h.fields.completedAt.disabled,true);assert.equal(h.fields.title.value,'Corrected title');
+});

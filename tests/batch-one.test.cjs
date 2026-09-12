@@ -25,11 +25,11 @@ test('acknowledged saved draft yields to subsequent remote updates',()=>{
 });
 const event={preventDefault(){},currentTarget:{querySelector:()=>({})}};
 test('a failed save preserves the draft and provides retry feedback',async()=>{
- const h=setup({runBusy:async(b,l,fn)=>fn(),setDoc:async()=>{throw Error('offline')},doc:()=>({}),db:{}});await h.c.saveRating(event);assert.equal(h.state.monthDrafts.size,1);assert.match(h.ui.monthMessage.textContent,/draft is still here/);
+ const h=setup({moveShelfEntry:async(uid,id,status)=>({status}),runBusy:async(b,l,fn)=>fn(),setDoc:async()=>{throw Error('offline')},doc:()=>({}),db:{}});await h.c.saveRating(event);assert.equal(h.state.monthDrafts.size,1);assert.match(h.ui.monthMessage.textContent,/draft is still here/);
 });
 test('typing during a save preserves newer edits after the write resolves',async()=>{
  let release;const pending=new Promise(r=>{release=r});
- const h=setup({runBusy:async(b,l,fn)=>fn(),setDoc:()=>pending,doc:()=>({}),db:{},recordActivity:async()=>{}});
+ const h=setup({moveShelfEntry:async(uid,id,status)=>({status}),runBusy:async(b,l,fn)=>fn(),setDoc:()=>pending,doc:()=>({}),db:{},recordActivity:async()=>{}});
  const saving=h.c.saveRating(event);h.ui.monthComment.value='Newer words';h.c.rememberMonthDraft();release();await saving;
  h.c.syncMonthForm({stars:4,comment:'My unfinished thought'});assert.equal(h.ui.monthComment.value,'Newer words');assert.match(h.ui.monthMessage.textContent,/newer edits are not saved/);
 });
@@ -45,6 +45,6 @@ test('notifications reveal the homepage and expand the specific archived event',
 test('successful status save immediately updates the open label',async()=>{
  const form={querySelector:()=>({})},label={textContent:'reading'},message={};const entry={id:'e',title:'Book',status:'reading'};
  const nodes={detailShelfStatus:{value:'read'},detailShelfStatusForm:form,detailShelfStatusLabel:label,bookDetailMessage:message};
- const c=vm.createContext({state:{user:{uid:'u'},openProfileId:'u',shelfEntries:[entry]},$:id=>nodes[id],isMember:()=>true,runBusy:async(b,l,fn)=>fn(),serverTimestamp:()=>0,setDoc:async()=>{},doc:()=>({}),db:{},recordActivity:async()=>{},activityTypeForStatus:s=>s,toast(){},console});
+ const c=vm.createContext({state:{user:{uid:'u'},openProfileId:'u',shelfEntries:[entry]},$:id=>nodes[id],isMember:()=>true,moveShelfEntry:async(uid,id,status)=>({status}),runBusy:async(b,l,fn)=>fn(),serverTimestamp:()=>0,setDoc:async()=>{},doc:()=>({}),db:{},recordActivity:async()=>{},activityTypeForStatus:s=>s,toast(){},console});
  vm.runInContext(extract('updateShelfStatus'),c);await c.updateShelfStatus({preventDefault(){},currentTarget:form},'e');assert.equal(label.textContent,'read');assert.equal(entry.status,'read');
 });
