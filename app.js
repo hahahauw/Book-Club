@@ -510,7 +510,7 @@ function renderBooks() {
   const selected = state.genre; ui.genre.innerHTML = '<option value="">All genres</option>' + allGenres.map((genre) => `<option value="${escapeHtml(genre)}">${escapeHtml(genre)}</option>`).join(""); ui.genre.value = selected;
   const books = visibleBooks();
   ui.shelfResultStatus.textContent = `${books.length} book${books.length === 1 ? "" : "s"} shown.`;
-  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}${savedBookBadge(book)}<span class="shelf-book-copy"><strong>${escapeHtml(book.title)}</strong><small>${escapeHtml(book.author || "Unknown author")}</small></span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
+  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span class="shelf-book-copy"><strong>${escapeHtml(book.title)}</strong><small>${escapeHtml(book.author || "Unknown author")}</small>${savedBookBadge(book)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
   ui.monthPicker.innerHTML = '<option value="">Choose a book</option>' + recentFirst(state.books).map((book) => `<option value="${escapeHtml(book.id)}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
   renderMonth(); requestAnimationFrame(() => { if (!ui.books.classList.contains("is-expanded")) ui.books.scrollLeft = Math.min(scrollLeft, Math.max(0, ui.books.scrollWidth - ui.books.clientWidth)); updateShelfNavigation(); });
 }
@@ -1179,7 +1179,14 @@ function pinAvatar(post) {
   const member = state.members.find((item) => item.id === post.memberId);
   const urls = [...new Set([member?.photoURL, post.photoURL].map((url) => safeImageUrl(url)).filter(Boolean))];
   const label = initials(member?.displayName || post.displayName);
-  return urls.length ? `<img src="${escapeHtml(optimizedImageUrl(urls[0], 96))}" alt="" loading="lazy" width="36" height="36" data-pin-initials="${escapeHtml(label)}" data-pin-fallback="${escapeHtml(urls[1] || "")}">` : escapeHtml(label);
+  return urls.length ? `<img src="${escapeHtml(optimizedImageUrl(urls[0], 96))}" alt="" loading="eager" decoding="async" referrerpolicy="no-referrer" width="36" height="36" data-pin-original="${escapeHtml(optimizedImageUrl(urls[0], 96) !== urls[0] ? urls[0] : "")}" data-pin-initials="${escapeHtml(label)}" data-pin-fallback="${escapeHtml(urls[1] || "")}">` : escapeHtml(label);
+}
+function retryPinAvatar(image) {
+  const original = image.dataset.pinOriginal; image.dataset.pinOriginal = "";
+  if (original) { image.src = original; return; }
+  const fallback = image.dataset.pinFallback; image.dataset.pinFallback = "";
+  if (fallback) { image.src = fallback; return; }
+  image.replaceWith(document.createTextNode(image.dataset.pinInitials || "?"));
 }
 function renderBoard() {
   ui.pinBoard.innerHTML = state.boardPosts.length ? recentFirst(state.boardPosts).map((post) => `<article class="pin-note"><span class="pin-avatar">${pinAvatar(post)}</span><p>${escapeHtml(post.text)}</p><footer><span>${escapeHtml(post.displayName || "Club member")} · ${escapeHtml(dateTimeLabel(post.date))}</span>${isOfficer() ? `<button type="button" class="text-button" data-remove-pin="${escapeHtml(post.id)}">Remove</button>` : ""}</footer></article>`).join("") : '<p class="empty-state">Nothing pinned yet. The board is ready for its first note.</p>';
@@ -1824,9 +1831,7 @@ document.addEventListener("error", async (event) => {
   const image = event.target;
   if (!(image instanceof HTMLImageElement)) return;
   if (image.hasAttribute("data-pin-initials")) {
-    const fallback = image.dataset.pinFallback; image.dataset.pinFallback = "";
-    if (fallback) { image.src = optimizedImageUrl(fallback, 96); return; }
-    image.replaceWith(document.createTextNode(image.dataset.pinInitials)); return;
+    retryPinAvatar(image); return;
   }
   if (image.closest("#memoryPhotoContent")) {
     const fallback = document.createElement("p"); fallback.setAttribute("role", "status");
