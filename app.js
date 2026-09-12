@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=4";
+import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=5";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA-G9WsH-sMdTzXvylNSJ1b-l5XkjBEol4",
@@ -186,7 +186,7 @@ function syncDashboardSubscriptions() {
   }
   if (state.dashboardOwnerId === state.user.uid && state.stopDashboardShelf) return;
   state.stopDashboardShelf?.(); state.stopDashboardRatings?.(); state.dashboardOwnerId = state.user.uid; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false; renderDashboard();
-  state.stopDashboardShelf = onSnapshot(query(collection(db, "memberShelves", state.user.uid, "entries"), limit(300)), (snapshot) => {
+  state.stopDashboardShelf = onSnapshot(collection(db, "memberShelves", state.user.uid, "entries"), (snapshot) => {
     state.dashboardShelfEntries = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.dashboardLoaded = true;
     if (state.openProfileId === state.user.uid) state.shelfEntries = state.dashboardShelfEntries; renderDashboard(); refreshSavedBookIndicators();
   }, (error) => { console.warn("Personal dashboard shelf unavailable:", error); state.dashboardLoaded = true; ui.dashboardStats.removeAttribute("aria-busy"); ui.dashboardStats.innerHTML = '<p class="empty-state">Your dashboard could not load, but My library is still available.</p>'; ui.dashboardStatus.textContent = "Check the published Firestore rules and try reopening the page."; });
@@ -413,7 +413,7 @@ function syncGoalProgressSubscription() {
   }
   if (state.stopGoalProgress) return;
   state.goalProgressLoaded = false; renderReadingGoal();
-  state.stopGoalProgress = onSnapshot(query(collectionGroup(db, "entries"), limit(500)), (snapshot) => {
+  state.stopGoalProgress = onSnapshot(collectionGroup(db, "entries"), (snapshot) => {
     state.completedGoalBooks = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id, ownerId: entry.ref.parent.parent?.id || "" })).filter((entry) => entry.status === "read");
     state.goalProgressLoaded = true; renderReadingGoal();
   }, (error) => {
@@ -603,16 +603,34 @@ function setTheme(theme) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#162b28" : "#17332f");
 }
 function configuredUpload() { return Boolean(state.cloudName && state.uploadPreset); }
-async function uploadImage(file) {
+async function uploadImage(file, signal) {
   if (!file) return "";
   if (!configuredUpload()) throw new Error("An officer needs to save Cloudinary upload settings first.");
   if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
   if (file.size > 8 * 1024 * 1024) throw new Error("Please choose an image smaller than 8 MB.");
-  const data = new FormData(); data.append("file", file); data.append("upload_preset", state.uploadPreset);
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(state.cloudName)}/image/upload`, { method: "POST", body: data });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.secure_url) throw new Error(result.error?.message || "Image upload failed.");
-  return result.secure_url;
+  const controller = new AbortController(); let timedOut = false;
+  const cancel = () => controller.abort();
+  if (signal?.aborted) controller.abort(); else signal?.addEventListener("abort", cancel, { once: true });
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 30000);
+  try {
+    const data = new FormData(); data.append("file", file); data.append("upload_preset", state.uploadPreset);
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(state.cloudName)}/image/upload`, { method: "POST", body: data, signal: controller.signal });
+    const result = await response.json();
+    if (!response.ok || !result.secure_url) throw new Error(result.error?.message || "Image upload failed.");
+    return result.secure_url;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(timedOut ? "Photo upload timed out. Please retry." : "Photo upload stopped. You can resume it.");
+    throw error;
+  } finally { clearTimeout(timer); signal?.removeEventListener("abort", cancel); }
+}
+async function waitForMemoryWrite(write) {
+  let timer;
+  try { return await Promise.race([write, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Saving is taking too long. The pending write may still finish; Retry uses the same photo record.")), 30000); })]); }
+  finally { clearTimeout(timer); }
+}
+function stopMemoryUploads() {
+  state.memoryUploadStopped = true; state.memoryUploadController?.abort();
+  $("memoryStopUploads").disabled = true; ui.memoryStatus.textContent = "Stopping uploads. Waiting for any current photo save to finish…";
 }
 async function saveUploadSettings(event) {
   event.preventDefault();
@@ -703,30 +721,62 @@ async function selectCatalogBook(index) {
     ui.catalogMessage.textContent = "Extra details could not load, but you can still save this result or use manual entry.";
   }
 }
-async function existingShelfEntry(book) {
-  if (book.catalogKey) {
-    const shelf = await getDocs(query(collection(db, "memberShelves", state.user.uid, "entries"), where("catalogKey", "==", book.catalogKey), limit(1)));
-    if (!shelf.empty) return { ...shelf.docs[0].data(), id: shelf.docs[0].id };
-  }
-  const legacy = await getDocs(collection(db, "memberShelves", state.user.uid, "entries"));
-  return legacy.docs.map((entry) => ({ ...entry.data(), id: entry.id })).find((entry) => sameBook(entry, book)) || null;
+async function existingShelfEntry(book, uid = state.user?.uid) {
+  if (!uid) throw new Error("Sign in before opening your library.");
+  const shelf = await getDocs(collection(db, "memberShelves", uid, "entries"));
+  return shelf.docs.map((entry) => ({ ...entry.data(), id: entry.id })).find((entry) => sameBook(entry, book)) || null;
+}
+async function shelfEntryId(book) {
+  const normalize = (value) => String(value || "").normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const identity = JSON.stringify([normalize(book.title), normalize(book.author)]);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
+  return "book_" + [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function requireShelfOwner(uid) {
+  if (!isMember() || state.user?.uid !== uid) throw new Error("Your session changed. Reopen your library and try again.");
+}
+async function createShelfEntry(book, payload, uid) {
+  requireShelfOwner(uid);
+  const existing = await existingShelfEntry(book, uid);
+  requireShelfOwner(uid);
+  if (existing) return { added: false, id: existing.id, entry: existing };
+  const ref = doc(db, "memberShelves", uid, "entries", await shelfEntryId(book));
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref); requireShelfOwner(uid);
+    if (snapshot.exists()) return { added: false, id: ref.id, entry: snapshot.data() };
+    transaction.set(ref, payload);
+    return { added: true, id: ref.id, entry: payload };
+  });
+}
+async function moveShelfEntry(uid, id, status) {
+  if (!["reading", "read", "want-to-read"].includes(status)) throw new Error("Choose a reading status.");
+  const ref = doc(db, "memberShelves", uid, "entries", id);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref); requireShelfOwner(uid);
+    if (!snapshot.exists()) throw new Error("This book was removed. Reopen your library.");
+    const saved = snapshot.data(), patch = { status };
+    if (status === "read" && saved.status !== "read" && !saved.completedAt) patch.completedAt = serverTimestamp();
+    transaction.update(ref, patch);
+    return { ...saved, ...patch };
+  });
 }
 async function saveCatalogShelfBook(book, status) {
-  const existing = await existingShelfEntry(book); const key = `${existing?.id || "new"}:${status}`;
+  const uid = state.user?.uid; requireShelfOwner(uid);
+  const existing = await existingShelfEntry(book, uid); requireShelfOwner(uid);
+  const key = `${existing?.id || "new"}:${status}`;
   if (existing && existing.status === status) { ui.catalogMessage.textContent = `This book is already on your ${String(status).replace(/-/g, " ")} shelf.`; return false; }
-  if (existing && state.catalogDuplicateConfirmation !== key) { state.catalogDuplicateConfirmation = key; ui.catalogMessage.textContent = `This book is already on your ${String(existing.status || "reading").replace(/-/g, " ")} shelf. Press the button again to move it.`; return false; }
-  const metadata = withPageCount({ title: book.title, author: book.author, genre: ui.catalogGenre.value.trim() || existing?.genre || "", coverUrl: book.coverUrl || existing?.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim() || existing?.note || "", date: existing?.date || new Date().toISOString() }, book.pageCount || existing?.pageCount);
-  if (status === "read") metadata.completedAt = serverTimestamp();
+  if (existing && state.catalogDuplicateConfirmation !== key) { state.catalogDuplicateConfirmation = key; ui.catalogMessage.textContent = `Already on your ${String(existing.status || "reading").replace(/-/g, " ")} shelf. Press again to move it; your book details and notes will stay unchanged.`; return false; }
   if (existing) {
-    await setDoc(doc(db, "memberShelves", state.user.uid, "entries", existing.id), metadata, { merge: true });
-    await recordActivity(activityTypeForStatus(status), metadata, { shelfEntryId: existing.id, key: `${existing.id}_${status}` });
-    ui.catalogMessage.textContent = "Moved your existing shelf entry."; toast("Your shelf is keeping up with your reading life.");
-  } else {
-    const added = await addDoc(collection(db, "memberShelves", state.user.uid, "entries"), metadata);
-    await recordActivity(activityTypeForStatus(status), metadata, { shelfEntryId: added.id, key: `${added.id}_${status}` });
-    const message = shelfAddedMessage(); ui.catalogMessage.textContent = message; toast(message);
+    const entry = await moveShelfEntry(uid, existing.id, status);
+    await recordActivity(activityTypeForStatus(status), entry, { shelfEntryId: existing.id, key: `${existing.id}_${status}` });
+    ui.catalogMessage.textContent = "Moved your existing shelf entry. Personal details kept."; toast(ui.catalogMessage.textContent); return true;
   }
-  return true;
+  const metadata = withPageCount({ title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim(), date: new Date().toISOString() }, book.pageCount);
+  if (status === "read") metadata.completedAt = serverTimestamp();
+  const result = await createShelfEntry(book, metadata, uid);
+  if (!result.added) { ui.catalogMessage.textContent = "This book was already added to My library. Open it there to change its status."; return false; }
+  await recordActivity(activityTypeForStatus(status), metadata, { shelfEntryId: result.id, key: `${result.id}_${status}` });
+  ui.catalogMessage.textContent = shelfAddedMessage(); toast(ui.catalogMessage.textContent); return true;
 }
 async function findBookConnections(book) {
   const publicMatches = state.books.filter((item) => sameBook(item, book));
@@ -803,6 +853,8 @@ async function ensureProfile(user) {
 }
 onAuthStateChanged(auth, async (user) => {
   if (state.user?.uid !== user?.uid) {
+    state.profileRequest = null; state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null;
+    if (ui.profileDialog.open) closeDialog(ui.profileDialog);
     state.stopNotifications?.(); state.stopNotifications = null; state.notifications = [];
     state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvpOwnerId = null; state.eventRsvps = new Map();
     state.stopDashboardShelf?.(); state.stopDashboardShelf = null; state.stopDashboardRatings?.(); state.stopDashboardRatings = null; state.dashboardOwnerId = null; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false;
@@ -988,8 +1040,8 @@ async function addEvent(event) {
 }
 function renderMemoryOptions() {
   if (!ui.memoryEvent || !ui.memoryBook) return;
-  const selectedEvent = ui.memoryEvent.value || state.memories.find((memory) => memory.id === state.memoryEditingId)?.eventId || "";
-  const selectedBook = ui.memoryBook.value || state.memories.find((memory) => memory.id === state.memoryEditingId)?.bookId || "";
+  const selectedEvent = ui.memoryEvent.value;
+  const selectedBook = ui.memoryBook.value;
   const events = [...state.events].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   ui.memoryEvent.innerHTML = '<option value="">No event selected</option>' + events.map((event) => `<option value="${escapeHtml(event.id)}">${escapeHtml(eventDateLabel(event.date))} — ${escapeHtml(event.title)}</option>`).join("");
   ui.memoryBook.innerHTML = '<option value="">No book selected</option>' + [...state.books].sort((a, b) => String(a.title).localeCompare(String(b.title))).map((book) => `<option value="${escapeHtml(book.id)}">${escapeHtml(book.title)} — ${escapeHtml(book.author || "Unknown author")}</option>`).join("");
@@ -1040,7 +1092,13 @@ function openMemoryPhoto(memoryId) {
   const url = safeImageUrl(memory.imageUrl);
   $("memoryPhotoTitle").textContent = memory.title || "Club memory";
   $("memoryPhotoContent").innerHTML = url ? `<div class="memory-viewer-stage"><img src="${escapeHtml(optimizedImageUrl(url, 2000))}" alt="${escapeHtml(memory.title || "Club memory")}" decoding="async" referrerpolicy="no-referrer"></div><footer class="memory-viewer-footer"><span>${escapeHtml(memory.category || "Club memory")}</span><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open original photo in a new tab">Open original <span aria-hidden="true">↗</span></a></footer>` : '<p role="status">This photo is unavailable.</p>';
-  $("memoryPhotoNavigation").innerHTML = `<button type="button" class="button button-quiet" data-photo-step="-1" ${position <= 0 ? "disabled" : ""}>← Previous</button><span role="status">${position + 1} of ${photos.length}</span><button type="button" class="button button-quiet" data-photo-step="1" ${position >= photos.length - 1 ? "disabled" : ""}>Next →</button>`;
+  const navigation = $("memoryPhotoNavigation");
+  if (!navigation.querySelector("[data-photo-step]")) navigation.innerHTML = '<button type="button" class="button button-quiet" data-photo-step="-1">← Previous</button><span role="status"></span><button type="button" class="button button-quiet" data-photo-step="1">Next →</button>';
+  const previous = navigation.querySelector('[data-photo-step="-1"]'), next = navigation.querySelector('[data-photo-step="1"]');
+  const focused = document.activeElement;
+  previous.disabled = position <= 0; next.disabled = position >= photos.length - 1;
+  navigation.querySelector('[role="status"]').textContent = `${position + 1} of ${photos.length}`;
+  if ((focused === previous || focused === next) && focused.disabled) (previous.disabled ? next : previous).focus();
   const dialog = $("memoryPhotoDialog");
   if (!dialog.open) showDialog(dialog);
   state.memoryPhotoTrigger = $(`memory-${memoryId}`)?.querySelector(".memory-photo") || $("memoriesHeading");
@@ -1089,34 +1147,42 @@ async function addMemory(event) {
   }
   const queue = state.memoryUploadQueue;
   if (queue.some((item) => item.uid !== uid)) { ui.memoryStatus.textContent = "This upload belongs to another session. Cancel and select your photos again."; return; }
-  state.memoryUploading = true;
+  state.memoryUploading = true; state.memoryUploadStopped = false; state.memoryUploadController = new AbortController();
   const controls = [...ui.memoryForm.elements]; controls.forEach((input) => input.disabled = true);
-  let failures = 0;
+  $("memoryStopUploads").hidden = false; $("memoryStopUploads").disabled = false;
   for (const [index, item] of queue.entries()) {
+    if (state.memoryUploadStopped) break;
     if (item.saved) continue;
     ui.memoryStatus.textContent = `Saving photo ${index + 1} of ${queue.length}…`;
     try {
       if (!isOfficer() || state.user?.uid !== uid) throw new Error("Your session changed.");
-      if (!item.imageUrl) item.imageUrl = await uploadImage(item.file);
+      if (!item.imageUrl) item.imageUrl = await uploadImage(item.file, state.memoryUploadController.signal);
       if (!isOfficer() || state.user?.uid !== uid) throw new Error("Your session changed.");
       const payload = { ...item.payload, imageUrl: item.imageUrl, updatedAt: serverTimestamp() };
-      if (item.editing) await updateDoc(item.ref, payload); else await setDoc(item.ref, payload);
+      await waitForMemoryWrite(item.editing ? updateDoc(item.ref, payload) : setDoc(item.ref, payload));
       item.saved = true; item.error = "";
-    } catch (error) { failures++; item.error = `${item.file?.name || "Photo"}: ${error.message || "Could not save"}`; }
+    } catch (error) { item.error = `${item.file?.name || "Photo"}: ${error.message || "Could not save"}`; }
   }
-  state.memoryUploading = false; controls.forEach((input) => input.disabled = false);
-  if (failures) {
+  state.memoryUploading = false; state.memoryUploadController = null; controls.forEach((input) => input.disabled = false);
+  $("memoryStopUploads").hidden = true;
+  if (queue.some((item) => !item.saved)) {
     // Keep captured metadata, uploaded URLs and document IDs for a safe retry.
     controls.filter((input) => input !== ui.memorySave && input !== ui.memoryCancelEdit).forEach((input) => input.disabled = true);
     ui.memoryCancelEdit.hidden = false; ui.memoryCancelEdit.textContent = "Finish / discard failed uploads";
-    ui.memorySave.textContent = "Retry failed photos";
-    ui.memoryStatus.textContent = `${queue.filter((item) => item.saved).length} of ${queue.length} saved. ` + queue.filter((item) => !item.saved).map((item) => item.error).join("; ");
+    ui.memorySave.textContent = "Resume unsaved photos";
+    ui.memoryStatus.textContent = `${queue.filter((item) => item.saved).length} of ${queue.length} saved. ` + queue.filter((item) => !item.saved).map((item) => item.error || `${item.file?.name || "Photo"}: waiting to upload`).join("; ");
   } else { resetMemoryEditor(); toast(existing ? "Reading memory updated." : `${queue.length} photo${queue.length === 1 ? "" : "s"} added.`); }
 }
 async function addInvite(event) { event.preventDefault(); if (!isOfficer()) return; const email = ui.inviteEmail.value.trim().toLowerCase(); if (!email) return; const button = event.currentTarget.querySelector("button[type=submit]"); await runBusy(button, "Approving…", async () => { try { await setDoc(doc(db, "allowedEmails", email), { email, invitedAt: new Date().toISOString() }); ui.inviteForm.reset(); toast("That email can now create a member library."); } catch (error) { console.error(error); toast("Could not approve that email."); } }); }
 
+function pinAvatar(post) {
+  const member = state.members.find((item) => item.id === post.memberId);
+  const urls = [...new Set([member?.photoURL, post.photoURL].map((url) => safeImageUrl(url)).filter(Boolean))];
+  const label = initials(member?.displayName || post.displayName);
+  return urls.length ? `<img src="${escapeHtml(optimizedImageUrl(urls[0], 96))}" alt="" loading="lazy" width="36" height="36" data-pin-initials="${escapeHtml(label)}" data-pin-fallback="${escapeHtml(urls[1] || "")}">` : escapeHtml(label);
+}
 function renderBoard() {
-  ui.pinBoard.innerHTML = state.boardPosts.length ? recentFirst(state.boardPosts).map((post) => `<article class="pin-note"><span class="pin-avatar">${escapeHtml(initials(post.displayName))}</span><p>${escapeHtml(post.text)}</p><footer><span>${escapeHtml(post.displayName || "Club member")} · ${escapeHtml(dateTimeLabel(post.date))}</span>${isOfficer() ? `<button type="button" class="text-button" data-remove-pin="${escapeHtml(post.id)}">Remove</button>` : ""}</footer></article>`).join("") : '<p class="empty-state">Nothing pinned yet. The board is ready for its first note.</p>';
+  ui.pinBoard.innerHTML = state.boardPosts.length ? recentFirst(state.boardPosts).map((post) => `<article class="pin-note"><span class="pin-avatar">${pinAvatar(post)}</span><p>${escapeHtml(post.text)}</p><footer><span>${escapeHtml(post.displayName || "Club member")} · ${escapeHtml(dateTimeLabel(post.date))}</span>${isOfficer() ? `<button type="button" class="text-button" data-remove-pin="${escapeHtml(post.id)}">Remove</button>` : ""}</footer></article>`).join("") : '<p class="empty-state">Nothing pinned yet. The board is ready for its first note.</p>';
 }
 async function postBoard(event) {
   event.preventDefault(); if (!isMember()) return;
@@ -1139,6 +1205,8 @@ function renderMembers() {
   }).join("") : '<p class="empty-state">Member libraries will appear here.</p>';
 }
 async function openProfile(uid) {
+  const request = {}; state.profileRequest = request;
+  const current = () => state.profileRequest === request && state.openProfileId === uid && ui.profileDialog.open;
   state.stopShelf?.();
   state.stopShelf = null;
   state.stopProfileActivity?.();
@@ -1149,6 +1217,7 @@ async function openProfile(uid) {
   if (!ui.profileDialog.open) showDialog(ui.profileDialog);
   try {
     const snapshot = await getDoc(doc(db, "members", uid));
+    if (!current()) return;
     if (!snapshot.exists()) throw new Error("That member library is unavailable.");
     const member = snapshot.data(), own = state.user?.uid === uid, accent = color(member.themeColor);
     state.openProfileMember = { ...member, id: uid };
@@ -1164,10 +1233,11 @@ async function openProfile(uid) {
     $("openCatalogFromShelf")?.addEventListener("click", () => openCatalog("shelf"));
     $("shelfFormToggle")?.addEventListener("click", (event) => { const form = $("shelfForm"), open = form.hidden; form.hidden = !open; event.currentTarget.setAttribute("aria-expanded", String(open)); event.currentTarget.textContent = open ? "Hide add-book form" : "Add a book"; });
     state.stopShelf?.();
-    state.stopShelf = onSnapshot(collection(db, "memberShelves", uid, "entries"), (shelf) => renderShelf(shelf.docs.map((entry) => ({ ...entry.data(), id: entry.id }))), () => { $("personalBooks").innerHTML = '<p class="empty-state">This library is unavailable right now. Check your connection and try reopening it.</p>'; });
-    if (member.shareActivity === true) state.stopProfileActivity = onSnapshot(query(collection(db, "activities"), where("actorId", "==", uid), limit(30)), (activity) => { state.profileActivities = newestActivities(activity.docs.map((entry) => ({ ...entry.data(), id: entry.id }))).slice(0, 10); renderMemberActivity(); }, () => { const target = $("memberActivityList"); if (target) { target.removeAttribute("aria-busy"); target.innerHTML = '<p class="empty-state">Public activity is unavailable right now.</p>'; } });
+    state.stopShelf = onSnapshot(collection(db, "memberShelves", uid, "entries"), (shelf) => { if (current()) renderShelf(shelf.docs.map((entry) => ({ ...entry.data(), id: entry.id }))); }, () => { if (!current()) return; $("personalBooks").innerHTML = '<p class="empty-state">This library is unavailable right now. Check your connection and try reopening it.</p>'; });
+    if (member.shareActivity === true) state.stopProfileActivity = onSnapshot(query(collection(db, "activities"), where("actorId", "==", uid), limit(30)), (activity) => { if (!current()) return; state.profileActivities = newestActivities(activity.docs.map((entry) => ({ ...entry.data(), id: entry.id }))).slice(0, 10); renderMemberActivity(); }, () => { if (!current()) return; const target = $("memberActivityList"); if (target) { target.removeAttribute("aria-busy"); target.innerHTML = '<p class="empty-state">Public activity is unavailable right now.</p>'; } });
     else renderMemberActivity();
   } catch (error) {
+    if (!current()) return;
     console.error(error);
     ui.profileContent.innerHTML = `<p class="empty-state profile-error">${escapeHtml(error.message || "That member library could not open.")}</p>`;
   }
@@ -1265,7 +1335,7 @@ function renderReplyContext() {
   const formLabel = $("bookCommentFormLabel"); if (formLabel) formLabel.textContent = state.replyTarget ? "Write a reply" : "Add a note";
 }
 function setReplyTarget(commentId) {
-  const target = state.bookComments.find((comment) => comment.id === commentId); if (!target) return;
+  const target = combinedBookComments().find((comment) => comment.id === commentId && !comment.legacy); if (!target) return;
   state.replyTarget = target; renderReplyContext(); $("bookCommentText")?.focus();
 }
 function clearReplyTarget() { state.replyTarget = null; renderReplyContext(); }
@@ -1346,6 +1416,8 @@ async function savePersonalEntry(event, book) {
   try { completed = dateControl ? parseCompletionDate(finished) : null; } catch (error) { message.textContent = error.message; return; }
   const dateChanged = Boolean(dateControl) && finished !== (dateControl?.dataset?.initialDate ?? completionDateInput(book.completedAt));
   await runBusy(form.querySelector('button[type="submit"]'), "Saving…", async () => {
+    const controls = Array.from(form.elements).map((control) => [control, control.disabled]);
+    controls.forEach(([control]) => control.disabled = true);
     try {
       if (file) patch.coverUrl = await uploadImage(file);
       else patch.coverUrl = patch.coverUrl ? safeImageUrl(patch.coverUrl) : "";
@@ -1372,6 +1444,7 @@ async function savePersonalEntry(event, book) {
       }
       toast("Book updated in your library.");
     } catch (error) { console.error(error); message.textContent = error.code ? "Could not save your changes. Your edits are still here; try again." : error.message; }
+    finally { controls.forEach(([control, disabled]) => control.disabled = disabled); }
   });
 }
 function renderShelf(entries) {
@@ -1431,13 +1504,6 @@ async function addClubBookToShelf(event, book) {
   button.disabled = true;
   message.textContent = "Adding to your shelf…";
   try {
-    const entries = await getDocs(collection(db, "memberShelves", uid, "entries"));
-    if (!isMember() || state.user?.uid !== uid) throw new Error("Your session changed. Reopen this book and try again.");
-    const existing = entries.docs.find((entry) => sameBook(entry.data(), book));
-    if (existing) {
-      message.textContent = `Already on your ${String(existing.data().status || "reading").replace(/-/g, " ")} shelf. You can edit it in My library.`;
-      return;
-    }
     const text = (value, max) => String(value || "").trim().slice(0, max);
     const entry = withPageCount({
       title: text(book.title, 160) || "Untitled book", author: text(book.author, 100) || "Unknown author",
@@ -1449,15 +1515,9 @@ async function addClubBookToShelf(event, book) {
       status, note: "", date: new Date().toISOString()
     }, book.pageCount);
     if (status === "read") entry.completedAt = serverTimestamp();
-    // A stable destination plus a transaction prevents two tabs adding this club book twice.
-    const ref = doc(db, "memberShelves", uid, "entries", `club_${book.id}`);
-    const added = await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(ref);
-      if (!isMember() || state.user?.uid !== uid) throw new Error("Your session changed. Reopen this book and try again.");
-      if (snapshot.exists()) return false;
-      transaction.set(ref, entry);
-      return true;
-    });
+    const result = await createShelfEntry(book, entry, uid), added = result.added;
+    const ref = { id: result.id };
+    if (!added) { message.textContent = `Already on your ${String(result.entry.status || "reading").replace(/-/g, " ")} shelf. Your existing entry was kept.`; return; }
     message.textContent = added ? `Added to your ${status.replace(/-/g, " ")} shelf. Find it in My library.` : "This book is already in My library. Your existing entry was kept.";
     if (added) {
       toast("Added to your shelf.");
@@ -1531,7 +1591,7 @@ async function postBookComment(event, bookId) {
   if (!isMember() || state.activeBookId !== bookId) return;
   const text = $("bookCommentText")?.value.trim();
   if (!text) return;
-  const parent = state.replyTarget && state.bookComments.find((comment) => comment.id === state.replyTarget.id);
+  const parent = state.replyTarget && combinedBookComments().find((comment) => comment.id === state.replyTarget.id && !comment.legacy);
   const spoiler = Boolean($("bookCommentSpoiler")?.checked), spoilerScope = spoiler ? ($("bookSpoilerScope")?.value.trim() || "").slice(0, 80) : "";
   const signature = `${bookId}|${parent?.id || "root"}|${text}|${spoiler}|${spoilerScope}`;
   if (state.lastCommentPost?.signature === signature && Date.now() - state.lastCommentPost.time < 8000) { $("bookCommentMessage").textContent = "That note was already posted a moment ago."; return; }
@@ -1572,16 +1632,8 @@ async function updateShelfStatus(event, entryId) {
   const button = form.querySelector("button[type=submit]");
   await runBusy(button, "Updating…", async () => {
     try {
-      const updates = {
-        title: entry.title || "Untitled book",
-        author: entry.author || "Unknown author",
-        coverUrl: entry.coverUrl || "",
-        status,
-        note: entry.note || "",
-        date: entry.date || new Date().toISOString()
-      };
-      if (status === "read" && !entry.completedAt) updates.completedAt = serverTimestamp();
-      await setDoc(doc(db, "memberShelves", ownerId, "entries", entryId), updates, { merge: true });
+      const updated = await moveShelfEntry(ownerId, entryId, status);
+      Object.assign(entry, updated);
       entry.status = status;
       if ($("detailShelfStatusForm") === form && state.user?.uid === ownerId) {
         if (label) label.textContent = status.replace(/-/g, " ");
@@ -1628,41 +1680,32 @@ async function saveBookMetadata(event, bookId) {
 async function addShelfBook(event) {
   event.preventDefault();
   if (!isMember() || state.openProfileId !== state.user?.uid) return;
-  const form = event.currentTarget;
-  const button = form.querySelector("button[type=submit]");
+  const form = event.currentTarget, uid = state.user.uid, button = form.querySelector("button[type=submit]");
+  const candidate = { title: $("shelfTitle").value.trim(), author: $("shelfAuthor").value.trim() };
+  const file = $("shelfFile")?.files?.[0];
+  const shelfBook = withPageCount({ ...candidate, genre: $("shelfGenre").value.trim(), coverUrl: $("shelfCover").value.trim(), status: $("shelfStatus").value, note: $("shelfNote").value.trim(), date: new Date().toISOString() }, $("shelfPages")?.value);
+  if (!candidate.title || !candidate.author) { toast("Add a title and author."); return; }
+  if (shelfBook.status === "read") shelfBook.completedAt = serverTimestamp();
   await runBusy(button, "Adding…", async () => {
+    const controls = Array.from(form.elements).map((control) => [control, control.disabled]);
+    controls.forEach(([control]) => control.disabled = true);
     let saved = false;
     try {
-      const candidate = { title: $("shelfTitle").value.trim(), author: $("shelfAuthor").value.trim() };
-      const existing = await existingShelfEntry(candidate);
-      if (existing) { toast(`“${candidate.title}” is already on your personal shelf. Open its cover to change the reading status.`); return; }
-      const file = $("shelfFile")?.files?.[0];
-      const coverUrl = $("shelfCover").value.trim() || (file ? await uploadImage(file) : "");
-      const status = $("shelfStatus").value;
-      const shelfBook = withPageCount({
-        title: candidate.title,
-        author: candidate.author,
-        genre: $("shelfGenre").value.trim(),
-        coverUrl,
-        status,
-        note: $("shelfNote").value.trim(),
-        date: new Date().toISOString()
-      }, $("shelfPages")?.value);
-      if (status === "read") shelfBook.completedAt = serverTimestamp();
-      const added = await addDoc(collection(db, "memberShelves", state.openProfileId, "entries"), shelfBook);
+      const existing = await existingShelfEntry(candidate, uid); requireShelfOwner(uid);
+      if (existing) { toast(`“${candidate.title}” is already on your personal shelf.`); return; }
+      if (!shelfBook.coverUrl && file) shelfBook.coverUrl = await uploadImage(file);
+      const result = await createShelfEntry(candidate, shelfBook, uid);
+      if (!result.added) { toast("This book is already in My library. Your existing entry was kept."); return; }
       saved = true;
-      await recordActivity(activityTypeForStatus(status), shelfBook, { shelfEntryId: added.id, key: `${added.id}_${status}` });
-      if (form.isConnected) form.reset();
-      toast(shelfAddedMessage());
-    } catch (error) {
-      console.error(error);
-      toast(saved ? "Your book was saved. Reopen your library to refresh it." : (error.message || "Could not add that book."));
-    }
+      await recordActivity(activityTypeForStatus(shelfBook.status), shelfBook, { shelfEntryId: result.id, key: `${result.id}_${shelfBook.status}` });
+      if (form.isConnected) form.reset(); toast(shelfAddedMessage());
+    } catch (error) { console.error(error); toast(saved ? "Your book was saved. Reopen your library to refresh it." : (error.message || "Could not add that book.")); }
+    finally { controls.forEach(([control, disabled]) => control.disabled = disabled); }
   });
 }
 
 onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderBooks(); renderNotifications(); renderMemoryOptions(); renderMemories(); renderDashboard(); renderDiscovery(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { ui.books.removeAttribute("aria-busy"); ui.books.innerHTML = '<p class="empty-state">The bookshelf is unavailable right now.</p>'; });
-onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMembers(); renderMonth(); renderNotifications(); renderDashboard(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
+onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMembers(); renderBoard(); renderMonth(); renderNotifications(); renderDashboard(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
 onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.activityLoaded = true; renderActivityFeed(); renderDiscovery(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; renderDiscovery(); });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { const pick = snapshot.data() || {}; state.currentPickId = pick.bookId || null; state.monthAccent = /^#[0-9a-f]{6}$/i.test(pick.highlightColor || "") ? pick.highlightColor : "#d8e66f"; if ($("monthAccent")) $("monthAccent").value = state.monthAccent; renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { toast("Book of the Month could not load."); });
 onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement yet—check back after the next library meeting."; if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
@@ -1683,7 +1726,7 @@ onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot
 onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
 
 ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid)); ui.dashboardOpenLibrary.addEventListener("click", () => openProfile(state.user.uid));
-ui.profileDialog.addEventListener("close", () => { state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
+ui.profileDialog.addEventListener("close", () => { state.profileRequest = null; state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
 ui.bookDialog.addEventListener("close", stopBookSocialSubscriptions);
 ui.notificationButton.addEventListener("click", () => { renderNotifications(); showDialog(ui.notificationDialog); });
 ui.markNotificationsRead.addEventListener("click", markAllNotificationsRead);
@@ -1780,6 +1823,11 @@ async function retryCoverImage(image) {
 document.addEventListener("error", async (event) => {
   const image = event.target;
   if (!(image instanceof HTMLImageElement)) return;
+  if (image.hasAttribute("data-pin-initials")) {
+    const fallback = image.dataset.pinFallback; image.dataset.pinFallback = "";
+    if (fallback) { image.src = optimizedImageUrl(fallback, 96); return; }
+    image.replaceWith(document.createTextNode(image.dataset.pinInitials)); return;
+  }
   if (image.closest("#memoryPhotoContent")) {
     const fallback = document.createElement("p"); fallback.setAttribute("role", "status");
     fallback.textContent = "The photo could not load. Try the original photo link below."; image.replaceWith(fallback); return;
@@ -1816,3 +1864,6 @@ $("memoryPhotoDialog").addEventListener("keydown", (event) => {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.target.matches("input,textarea,select")) return;
   if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); moveMemoryPhoto(event.key === "ArrowLeft" ? -1 : 1); }
 });
+
+$("memoryStopUploads").addEventListener("click", stopMemoryUploads);
+window.addEventListener("beforeunload", (event) => { if (state.memoryUploading || state.memoryUploadQueue?.some((item) => !item.saved)) { event.preventDefault(); event.returnValue = ""; } });

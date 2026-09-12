@@ -19,7 +19,7 @@ test('grouping preserves all photos, event identity, and deleted-event snapshots
 test('batch retry skips saved photos and reuses uploaded URL and destination after write failure',async()=>{
  const controls=[];const node=()=>({value:'',disabled:false});const ui={memoryFile:{files:[{name:'a'},{name:'b'}]},memoryImage:node(),memoryCaption:{value:'Meeting'},memoryCategory:node(),memoryEvent:node(),memoryBook:node(),memoryStatus:{},memorySave:{},memoryCancelEdit:{},memoryForm:{elements:controls}};
  const state={user:{uid:'u'},memories:[],events:[],books:[]};let counter=0,uploads=0,writes=[],fail=true;
- const c=vm.createContext({state,ui,isOfficer:()=>true,safeImageUrl:x=>x,db:{},collection:()=>({}),doc:()=>({id:++counter}),uploadImage:async f=>{uploads++;return 'https://image/'+f.name},serverTimestamp:()=>1,setDoc:async(ref)=>{writes.push(ref.id);if(ref.id===2&&fail)throw Error('offline');},resetMemoryEditor:()=>{state.memoryUploadQueue=null},toast(){}});
+ const c=vm.createContext({AbortController, $:()=>({}), waitForMemoryWrite:write=>write, state,ui,isOfficer:()=>true,safeImageUrl:x=>x,db:{},collection:()=>({}),doc:()=>({id:++counter}),uploadImage:async f=>{uploads++;return 'https://image/'+f.name},serverTimestamp:()=>1,setDoc:async(ref)=>{writes.push(ref.id);if(ref.id===2&&fail)throw Error('offline');},resetMemoryEditor:()=>{state.memoryUploadQueue=null},toast(){}});
  vm.runInContext(extract('async function addMemory(', 'async function addInvite('),c);
  await c.addMemory({preventDefault(){}});assert.equal(uploads,2);assert.match(ui.memoryStatus.textContent,/1 of 2 saved/);
  fail=false;await c.addMemory({preventDefault(){}});assert.equal(uploads,2);assert.deepEqual(writes,[1,2,2]);assert.equal(state.memoryUploadQueue,null);
