@@ -37,14 +37,14 @@ test('switching catalogue results immediately makes the old book unsaveable and 
   const pending = [deferred(), deferred()];
   const state = { catalogResults: [{ title: 'A', author: 'Author' }, { title: 'B', author: 'Author' }], catalogBook: { title: 'Old' } };
   const ui = { catalogPreview: { hidden: false }, catalogMessage: {}, catalogGenre: {}, catalogPreviewBook: {} };
-  const c = vm.createContext({ state, ui, loadCatalogDetails: book => pending[book.title === 'A' ? 0 : 1].promise, catalogCover: () => '', escapeHtml: String, pageCountValue: () => 0, isMember: () => true });
+  const c = vm.createContext({ state, ui, revealCatalogPreview: () => { ui.catalogPreview.hidden = false; }, loadCatalogDetails: book => pending[book.title === 'A' ? 0 : 1].promise, catalogCover: () => '', escapeHtml: String, pageCountValue: () => 0, isMember: () => true });
   load(c, ['selectCatalogBook']);
   const first = c.selectCatalogBook(0);
   assert.equal(state.catalogBook, null); assert.equal(ui.catalogPreview.hidden, true);
   const second = c.selectCatalogBook(1);
   pending[1].resolve(state.catalogResults[1]); await second;
   pending[0].resolve(state.catalogResults[0]); await first;
-  assert.equal(state.catalogBook.title, 'B'); assert.match(ui.catalogPreviewBook.innerHTML, /<h3>B<\/h3>/);
+  assert.equal(state.catalogBook.title, 'B'); assert.match(ui.catalogPreviewBook.innerHTML, /<h3[^>]*>B<\/h3>/);
 });
 test('new catalogue search clears old selectable results before the network responds', async () => {
   const pending = deferred(); let cleared = false;

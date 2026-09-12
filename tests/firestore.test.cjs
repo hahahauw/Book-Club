@@ -1,6 +1,7 @@
 const { test, before, after, beforeEach } = require('node:test');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, updateDoc, getDoc, serverTimestamp, runTransaction } = require('firebase/firestore');
 
@@ -30,6 +31,21 @@ beforeEach(async () => {
   });
 });
 after(async () => { if (env) await env.cleanup(); });
+
+test('normalized catalogue metadata fits shelf, guest and officer publication schemas', async () => {
+  const { normalizeCatalogMetadata } = await import(pathToFileURL(resolve(__dirname, '../book-catalog.js')).href);
+  const metadata = normalizeCatalogMetadata({ title: 'T'.repeat(180), author: 'A'.repeat(120), genre: 'G'.repeat(100), synopsis: 'S'.repeat(4000), catalogKey: '/works/OL1W', pageCount: 250 });
+  await assertSucceeds(setDoc(doc(db('alice'), 'memberShelves/alice/entries/catalogue'), { ...metadata, status: 'reading', note: '', date: '2026-09-12' }));
+  await assertSucceeds(setDoc(doc(db(), 'pendingBooks/catalogue'), { ...metadata, name: 'Guest', why: '', comments: [], date: '2026-09-12', submittedAt: '2026-09-12', status: 'pending' }));
+  await assertSucceeds(setDoc(doc(db('officer'), 'books/approved'), { ...metadata, memberName: 'Guest', name: 'Guest', why: '', comments: [], date: '2026-09-12' }));
+});
+
+test('public shelf disclosure matches current rules even when summary cards are hidden', async () => {
+  await assertSucceeds(updateDoc(doc(db('alice'), 'members/alice'), { showReadingStats: false }));
+  await assertSucceeds(setDoc(doc(db('alice'), 'memberShelves/alice/entries/public-note'), { ...shelf, note: 'A public thought' }));
+  await assertSucceeds(getDoc(doc(db(), 'memberShelves/alice/entries/public-note')));
+  await assertSucceeds(getDoc(doc(db('bob'), 'memberShelves/alice/entries/public-note')));
+});
 
 test('owner can create manual and catalogue shelves, then move a book', async () => {
   const ref = doc(db('alice'), 'memberShelves/alice/entries/entry');

@@ -1,5 +1,17 @@
 # First security and reliability repair batch
 
+## Catalogue and visibility baseline — 12 September 2026
+
+The follow-up repair starts from `522ddeaf240414f0c9b7f5294a0f8002920fa1dd`. It changes frontend disclosure and catalogue payload preparation, with no rule deployment, permission changes or stored-data migration.
+
+- The common metadata contract is title 160, author 100, genre 80, synopsis 3,000, source 100 and publication year 20 characters. Catalogue identifiers retain their values and reject excessive lengths; invalid/overlong cover URLs are omitted. The preview and officer queue disclose shortening or unusable metadata. The original provider response is not mutated.
+- New guest submissions use the public-book synopsis limit even though pending-book rules permit 4,000 characters. Approval normalizes older queue records to the public limit. Publication must succeed before the pending record is deleted; the pre-existing multi-write approval flow still needs a separate idempotency repair.
+- Shelf notes, reading status and completion dates remain public under the checked-in rules. The note editors now say so, and hiding summary cards is described as a display preference. Private notes require a separate document/rules migration; wording alone does not provide privacy.
+- **Deployment parity is still unverified.** This session has repository access but no captured Firebase console/rules release or production schema export. Before changing rules, record the active rules release, compare it with `firestore.rules`, and inventory existing shelf and queue field names/types. Do not treat emulator success as confirmation of production authorization.
+- `firebase.test.json` remains emulator-only. Runtime Firebase stays at CDN version 10.12.5; the test SDK/CLI versions are separately recorded in `tests/README.md`. This batch does not silently upgrade the deployed SDK.
+
+### Earlier security batch
+
 Prepared against main commit `04d22a857efe625a9f734ff2acd37c164edade06`.
 This branch is a review proposal. No production rules or data were changed and no deployment was performed.
 

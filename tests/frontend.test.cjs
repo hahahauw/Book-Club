@@ -140,6 +140,8 @@ for (const feature of ['shelf', 'comment']) {
         addDoc: async () => { if (outcome === 'write failure') throw new Error('Write rejected'); return { id: 'new-book' }; },
         setDoc: async () => { if (outcome === 'write failure') throw new Error('Write rejected'); },
         existingShelfEntry: async () => null, withPageCount: (book) => book,
+        requireShelfOwner: () => {},
+        createShelfEntry: async () => { if (outcome === 'write failure') throw new Error('Write rejected'); return { added: true, id: 'new-book' }; },
         recordActivity: async () => { if (outcome === 'secondary failure') throw new Error('Refresh failed'); },
         activityTypeForStatus: () => 'started_reading', shelfAddedMessage: () => 'Book added', toast: text => { message = text; },
         clearReplyTarget: () => {}, updateSpoilerScopeVisibility: () => {}, console: { error() {} }
