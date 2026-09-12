@@ -16,6 +16,7 @@
 .section-label h2,.activity-heading h2 { font-size:clamp(1.7rem,3.5vw,2.5rem); }
 .section-copy { margin-bottom:18px; }
 .month-card { grid-template-columns:140px minmax(0,1fr); padding:24px; gap:26px; background:var(--surface); border:1px solid var(--line); border-top:4px solid var(--month-accent,var(--lime)); }
+html[data-theme="dark"] .month-card { background:var(--surface); }
 .month-cover { width:140px; }
 .month-card h3 { font-size:clamp(1.5rem,3vw,2.3rem); letter-spacing:-.025em; }
 .month-description { font-size:14px; }
@@ -217,7 +218,9 @@ body:has(#memoryPhotoDialog[open]) { overflow:hidden; }
 .memory-photo-navigation span { color: var(--muted); }
 .saved-book-indicator { display: block; padding: 6px 10px; font-size: 12px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; }
 .saved-book-indicator[hidden] { display: none; }
-.book-card > .saved-book-indicator { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 2; }
+.shelf-book-copy .saved-book-indicator { position:static; display:block; width:auto; margin-top:4px; padding:0; border:0; border-radius:0; background:transparent; color:inherit; font-size:11px; font-weight:400; line-height:1.35; }
+.shelf-book-copy .saved-book-indicator[hidden] { display:none; }
 .book-comment[data-notification-target] { outline: 2px solid var(--accent-text); outline-offset: 4px; scroll-margin-block: 24px; }
 
-.pin-avatar img { display:block; width:100%; height:100%; object-fit:cover; border-radius:50%; }
+.pin-avatar { width:36px; height:36px; min-width:36px; min-height:36px; overflow:hidden; }
+.pin-avatar img { display:block; width:36px; height:36px; object-fit:cover; border-radius:50%; }
