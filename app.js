@@ -29,7 +29,20 @@ const ui = {
   members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
 };
 
-const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, dashboardShelfEntries: [], dashboardRatings: [], dashboardLoaded: false, dashboardRatingsLoaded: false, dashboardRatingsUnavailable: false, stopDashboardShelf: null, stopDashboardRatings: null, dashboardOwnerId: null, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", readingGoal: null, completedGoalBooks: [], goalProgressLoaded: false, stopGoalProgress: null, events: [], eventRsvps: new Map(), stopEventRsvps: null, eventRsvpOwnerId: null, rsvpBusy: new Set(), memories: [], memoryEditingId: null, boardPosts: [], shelfEntries: [], search: sessionStorage.getItem("becShelfSearch") || "", genre: sessionStorage.getItem("becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastDialogTrigger: null, lastRandomBookId: null, randomPickerActive: false, cloudName: localStorage.getItem("becCloudName") || "", uploadPreset: localStorage.getItem("becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
+const preferenceFallback = new Map();
+function readPreference(storageName, key) {
+  const cacheKey = `${storageName}:${key}`;
+  if (preferenceFallback.has(cacheKey)) return preferenceFallback.get(cacheKey);
+  try { return window[storageName].getItem(key); } catch { return null; }
+}
+function writePreference(storageName, key, value) {
+  const text = String(value);
+  const cacheKey = `${storageName}:${key}`;
+  try { window[storageName].setItem(key, text); preferenceFallback.delete(cacheKey); }
+  catch { preferenceFallback.set(cacheKey, text); }
+}
+
+const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, dashboardShelfEntries: [], dashboardRatings: [], dashboardLoaded: false, dashboardRatingsLoaded: false, dashboardRatingsUnavailable: false, stopDashboardShelf: null, stopDashboardRatings: null, dashboardOwnerId: null, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", readingGoal: null, completedGoalBooks: [], goalProgressLoaded: false, stopGoalProgress: null, events: [], eventRsvps: new Map(), stopEventRsvps: null, eventRsvpOwnerId: null, rsvpBusy: new Set(), memories: [], memoryEditingId: null, boardPosts: [], shelfEntries: [], search: readPreference("sessionStorage", "becShelfSearch") || "", genre: readPreference("sessionStorage", "becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastRandomBookId: null, randomPickerActive: false, cloudName: readPreference("localStorage", "becCloudName") || "", uploadPreset: readPreference("localStorage", "becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
 const REACTION_OPTIONS = [
   ["emotional", "😭", "Emotional"], ["slow_burn", "🐌", "Slow Burn"], ["mind_blown", "🤯", "Mind-blowing"], ["comfort_read", "🧸", "Comfort Read"], ["funny", "😂", "Funny"], ["devastating", "💀", "Devastating"], ["thought_provoking", "🧠", "Thought-provoking"], ["great_romance", "❤️", "Great Romance"], ["great_worldbuilding", "🌎", "Great Worldbuilding"], ["beautiful_writing", "✍️", "Beautiful Writing"]
 ];
@@ -79,8 +92,34 @@ function toast(message) {
     if (ui.toast.hidePopover && ui.toast.matches(":popover-open")) ui.toast.hidePopover();
   }, 4200);
 }
-function showDialog(dialog, focusTarget) { state.lastDialogTrigger = document.activeElement; dialog.showModal(); requestAnimationFrame(() => (focusTarget || dialog.querySelector("input,select,textarea,button"))?.focus()); }
-function closeDialog(dialog) { if (!dialog?.open) return; dialog.close(); const trigger = state.lastDialogTrigger; state.lastDialogTrigger = null; if (trigger?.isConnected) requestAnimationFrame(() => trigger.focus()); }
+const dialogTriggers = new WeakMap();
+const dialogStack = [];
+function showDialog(dialog, focusTarget) {
+  if (!dialog.open) {
+    dialogTriggers.set(dialog, document.activeElement);
+    dialogStack.push(dialog);
+    dialog.addEventListener("close", () => restoreDialogFocus(dialog), { once: true });
+    dialog.showModal();
+  }
+  requestAnimationFrame(() => {
+    if (dialog.open && dialogStack.at(-1) === dialog) (focusTarget || dialog.querySelector("button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)"))?.focus();
+  });
+}
+function restoreDialogFocus(dialog) {
+  const trigger = dialogTriggers.get(dialog);
+  dialogTriggers.delete(dialog);
+  const index = dialogStack.indexOf(dialog);
+  if (index >= 0) dialogStack.splice(index, 1);
+  requestAnimationFrame(() => {
+    if (dialog.open) return;
+    const top = dialogStack.at(-1);
+    if (top?.contains(document.activeElement)) return;
+    if (trigger?.isConnected && !trigger.closest("[hidden]") && (!top || top.contains(trigger))) trigger.focus();
+    else if (top) top.querySelector("button:not(:disabled),input:not(:disabled)")?.focus();
+    else if (dialog.id === "memoryPhotoDialog" && !$("memories").hidden) $("memoriesHeading").focus();
+  });
+}
+function closeDialog(dialog) { if (dialog?.open) dialog.close(); }
 async function runBusy(button, busyText, action) { if (!button || button.disabled) return; const label = button.textContent; button.disabled = true; if (busyText) button.textContent = busyText; try { return await action(); } finally { button.disabled = false; button.textContent = label; } }
 function activityMember(actorId) { return state.members.find((member) => member.id === actorId) || (actorId === state.user?.uid ? { ...state.profile, id: actorId } : { id: actorId, displayName: "A club member", photoURL: "" }); }
 function activityAction(activity) {
@@ -487,7 +526,7 @@ function updateShelfNavigation() {
   ui.shelfPrevious.disabled = !scrollable || ui.books.scrollLeft <= 2; ui.shelfNext.disabled = !scrollable || ui.books.scrollLeft + ui.books.clientWidth >= ui.books.scrollWidth - 2;
 }
 function moveShelf(direction) { const card = ui.books.querySelector(".book-card"); const distance = card ? card.getBoundingClientRect().width + 12 : ui.books.clientWidth * .8; ui.books.scrollBy({ left: direction * distance * 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
-function toggleShelfLayout() { ui.books.classList.toggle("is-expanded"); sessionStorage.setItem("becShelfExpanded", String(ui.books.classList.contains("is-expanded"))); ui.books.scrollTo({ left: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); updateShelfNavigation(); }
+function toggleShelfLayout() { ui.books.classList.toggle("is-expanded"); writePreference("sessionStorage", "becShelfExpanded", String(ui.books.classList.contains("is-expanded"))); ui.books.scrollTo({ left: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); updateShelfNavigation(); }
 function visibleBooks() {
   const term = state.search.toLowerCase();
   return recentFirst(state.books).filter((book) => (!state.genre || genreParts(book).some((genre) => genre.toLocaleLowerCase() === state.genre)) && (!term || [book.title, book.author, book.genre, book.name, book.memberName].some((value) => String(value || "").toLowerCase().includes(term))));
@@ -503,7 +542,7 @@ function pickRandomBook() {
 function renderBooks() {
   const scrollLeft = ui.books.scrollLeft;
   ui.books.removeAttribute("aria-busy");
-  ui.books.classList.toggle("is-expanded", sessionStorage.getItem("becShelfExpanded") === "true");
+  ui.books.classList.toggle("is-expanded", readPreference("sessionStorage", "becShelfExpanded") === "true");
   ui.search.value = state.search;
   const allGenres = [...new Set(state.books.flatMap(genreParts).map((genre) => genre.toLocaleLowerCase()))].sort();
   state.genre = allGenres.includes(state.genre.toLocaleLowerCase()) ? state.genre.toLocaleLowerCase() : "";
@@ -596,7 +635,7 @@ function ensureMonthAccentControl() { if ($("monthAccent")) return; const label 
 
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem("becTheme", theme);
+  writePreference("localStorage", "becTheme", theme);
   const nextTheme = theme === "dark" ? "light" : "dark";
   ui.theme.textContent = `${nextTheme[0].toUpperCase()}${nextTheme.slice(1)} mode`;
   ui.theme.setAttribute("aria-label", `Switch to ${nextTheme} mode`);
@@ -641,8 +680,8 @@ async function saveUploadSettings(event) {
       state.cloudName = ui.cloudName.value.trim();
       state.uploadPreset = ui.uploadPreset.value.trim() || "bookclub_unsigned";
       state.googleBooksKey = ui.googleBooksKey.value.trim();
-      localStorage.setItem("becCloudName", state.cloudName);
-      localStorage.setItem("becUploadPreset", state.uploadPreset);
+      writePreference("localStorage", "becCloudName", state.cloudName);
+      writePreference("localStorage", "becUploadPreset", state.uploadPreset);
       await setDoc(doc(db, "siteSettings", "catalog"), {
         cloudName: state.cloudName,
         uploadPreset: state.uploadPreset,
@@ -661,6 +700,7 @@ function prepareSuggestionForm() { ensureSuggestionUpload(); const signedMember 
 
 function catalogCover(book, className) { return automaticCoverUrl(book) ? coverImageMarkup(book, 240) : `<span class="${className}">${escapeHtml(book.title)}</span>`; }
 function openCatalog(target = "recommendation") {
+  if (state.catalogSaving) { toast("Your book is still saving. Please wait before opening the catalogue again."); return; }
   state.catalogSearchToken = {}; state.catalogSelectionToken = {}; state.catalogTarget = target; state.catalogResults = []; state.catalogBook = null; state.catalogDuplicateConfirmation = "";
   ui.catalogResults.innerHTML = ""; ui.catalogPreview.hidden = true; ui.catalogMessage.textContent = ""; ui.catalogSearchForm.reset(); ui.catalogSearchForm.querySelector("button").disabled = false; ui.catalogGuestName.value = ""; ui.catalogGenre.value = ""; ui.catalogShelfNote.value = ""; ui.catalogReason.value = "";
   ui.catalogDestination.value = isMember() && target === "shelf" ? "reading" : "recommendation"; updateCatalogDestination(); showDialog(ui.catalogDialog, ui.catalogQuery);
@@ -696,15 +736,17 @@ function renderCatalogResults() {
   ui.catalogResults.innerHTML = state.catalogResults.length ? state.catalogResults.map((book, index) => `<button type="button" class="catalog-result" data-catalog-result="${index}">${catalogCover(book, "catalog-result-cover")}<span><strong>${escapeHtml(book.title)}</strong><small>by ${escapeHtml(book.author)}</small><small>${book.publicationYear ? `First published ${escapeHtml(book.publicationYear)}` : "Publication date unavailable"}${book.isbn ? ` · ISBN ${escapeHtml(book.isbn)}` : ""}</small><span class="catalog-source">${escapeHtml(book.source || "Book catalogue")}</span>${savedBookBadge(book)}</span></button>`).join("") : '<p class="empty-state">No matches yet. Try a title, author, or ISBN—or enter it manually.</p>';
 }
 async function submitCatalogSearch(event) {
-  event.preventDefault(); const term = ui.catalogQuery.value.trim(); if (term.length < 2) return;
+  event.preventDefault(); if (state.catalogSaving) return; const term = ui.catalogQuery.value.trim(); if (term.length < 2) { ui.catalogMessage.textContent = "Enter at least two characters to search."; return; }
   const token = {}; state.catalogSearchToken = token; state.catalogSelectionToken = {};
-  const button = ui.catalogSearchForm.querySelector("button"); button.disabled = true; ui.catalogMessage.textContent = state.googleBooksKey ? "Searching Open Library and Google Books…" : "Searching Open Library…"; ui.catalogPreview.hidden = true; state.catalogBook = null;
+  const button = ui.catalogSearchForm.querySelector("button"); button.disabled = true; ui.catalogMessage.textContent = state.googleBooksKey ? "Searching Open Library and Google Books…" : "Searching Open Library…"; ui.catalogPreview.hidden = true; state.catalogBook = null; state.catalogResults = []; ui.catalogResults.replaceChildren();
   try { const results = await searchCatalog(term, { googleBooksApiKey: state.googleBooksKey }); if (state.catalogSearchToken !== token) return; state.catalogResults = results; renderCatalogResults(); ui.catalogMessage.textContent = state.catalogResults.length ? `${state.catalogResults.length} results. Choose the edition that looks right.` : "No match found. You can enter this book manually."; }
   catch (error) { if (state.catalogSearchToken !== token) return; console.error(error); state.catalogResults = []; renderCatalogResults(); ui.catalogMessage.textContent = error.message || "The catalogue is unavailable right now. Manual entry still works."; }
   finally { if (state.catalogSearchToken === token) button.disabled = false; }
 }
 async function selectCatalogBook(index) {
+  if (state.catalogSaving) return;
   const result = state.catalogResults[index]; if (!result) return;
+  state.catalogBook = null; ui.catalogPreview.hidden = true;
   const selection = {}; state.catalogSelectionToken = selection;
   ui.catalogMessage.textContent = "Loading book details…";
   try {
@@ -813,16 +855,32 @@ async function saveGuestCatalogSuggestion(book) {
   ui.catalogMessage.textContent = message; toast(message); return true;
 }
 async function saveCatalogBook() {
-  const book = state.catalogBook; if (!book) return;
-  ui.catalogSave.disabled = true;
-  try { const saved = !isMember() ? await saveGuestCatalogSuggestion(book) : ui.catalogDestination.value === "recommendation" ? await saveCatalogRecommendation(book) : await saveCatalogShelfBook(book, ui.catalogDestination.value); if (saved) setTimeout(() => closeDialog(ui.catalogDialog), 900); }
-  catch (error) { console.error(error); ui.catalogMessage.textContent = error.message || "Could not save this book."; }
-  finally { ui.catalogSave.disabled = false; }
+  const book = state.catalogBook; if (!book || state.catalogSaving) return;
+  if (!isMember() && !ui.catalogGuestName.value.trim()) { ui.catalogMessage.textContent = "Please add your name before sending this suggestion."; ui.catalogGuestName.focus(); return; }
+  state.catalogSaving = true;
+  const controls = [...ui.catalogDialog.querySelectorAll("input,textarea,select,button:not([data-close])")].map((control) => [control, control.disabled]);
+  controls.forEach(([control]) => { control.disabled = true; });
+  try {
+    const saved = !isMember() ? await saveGuestCatalogSuggestion(book) : ui.catalogDestination.value === "recommendation" ? await saveCatalogRecommendation(book) : await saveCatalogShelfBook(book, ui.catalogDestination.value);
+    if (saved) closeDialog(ui.catalogDialog);
+  } catch (error) { console.error(error); ui.catalogMessage.textContent = error.message || "Could not save this book."; }
+  finally { state.catalogSaving = false; controls.forEach(([control, disabled]) => { control.disabled = disabled; }); }
 }
-function openManualCatalogEntry() {
-  const target = isMember() ? ui.catalogDestination.value : "recommendation"; closeDialog(ui.catalogDialog);
+async function openManualCatalogEntry() {
+  if (state.catalogSaving) return;
+  const target = isMember() ? ui.catalogDestination.value : "recommendation";
+  closeDialog(ui.catalogDialog);
   if (target === "recommendation") { prepareSuggestionForm(); showDialog(ui.suggestionDialog, $("suggestTitle")); return; }
-  const shelfForm = $("shelfForm"); if (shelfForm) { shelfForm.hidden = false; $("shelfTitle")?.focus(); } else toast("Open My library, then choose Add a book to enter it manually.");
+  const uid = state.user?.uid;
+  if (!ui.profileDialog.open || state.openProfileId !== uid || !$("shelfForm")) await openProfile(uid);
+  if (state.user?.uid !== uid || state.openProfileId !== uid || !ui.profileDialog.open) return;
+  const form = $("shelfForm"), toggle = $("shelfFormToggle");
+  if (!form) { toast("Your library could not load. Close it and try My library again."); return; }
+  form.hidden = false;
+  toggle?.setAttribute("aria-expanded", "true");
+  if (toggle) toggle.textContent = "Hide add-book form";
+  $("shelfStatus").value = target;
+  requestAnimationFrame(() => { if (form.isConnected && ui.profileDialog.open) $("shelfTitle")?.focus(); });
 }
 
 async function signIn() { ui.signIn.disabled = true; ui.authStatus.textContent = "Opening Google sign-in…"; try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (error) { console.error(error); ui.authStatus.textContent = "Could not sign in. Please try again."; } finally { ui.signIn.disabled = false; } }
@@ -1067,7 +1125,7 @@ function updateMemoryView(scroll = true) {
   });
   if (!scroll) return;
   if (memoriesOpen) {
-    $("memoriesHeading").focus({ preventScroll: true });
+    if (!$("memoryPhotoDialog").open) $("memoriesHeading").focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: "instant" });
   } else if (switched) {
     let id = "top";
@@ -1102,7 +1160,7 @@ function openMemoryPhoto(memoryId) {
   const dialog = $("memoryPhotoDialog");
   if (!dialog.open) showDialog(dialog);
   state.memoryPhotoTrigger = $(`memory-${memoryId}`)?.querySelector(".memory-photo") || $("memoriesHeading");
-  state.lastDialogTrigger = state.memoryPhotoTrigger;
+  dialogTriggers.set(dialog, state.memoryPhotoTrigger);
 }
 function memoryCard(memory) {
   return `<article id="memory-${escapeHtml(memory.id)}" class="memory"><button type="button" class="memory-photo" data-memory-focus="${escapeHtml(memory.id)}" aria-label="Open full photo: ${escapeHtml(memory.title || "Club memory")}"><img src="${escapeHtml(optimizedImageUrl(memory.imageUrl, 1200))}" alt="${escapeHtml(memory.title || "Club memory")}" loading="lazy" decoding="async" width="1200" height="900"></button><div class="memory-caption"><small>${escapeHtml(memory.category || "Club memory")}</small><h3>${escapeHtml(memory.title)}</h3>${memoryAssociationMarkup(memory)}</div>${isOfficer() ? `<div class="memory-link-controls"><button type="button" data-edit-memory="${escapeHtml(memory.id)}">Edit</button></div><button class="remove-button" type="button" data-remove-memory="${escapeHtml(memory.id)}" aria-label="Remove memory">×</button>` : ""}</article>`;
@@ -1220,7 +1278,7 @@ async function openProfile(uid) {
   state.stopProfileActivity = null; state.profileActivities = [];
   state.openProfileId = uid;
   state.openProfileMember = null;
-  ui.profileContent.innerHTML = '<div class="skeleton skeleton-profile" aria-hidden="true"></div><p class="visually-hidden" role="status">Opening this member library…</p>';
+  ui.profileContent.innerHTML = '<button class="close-dialog" type="button" data-close="profileDialog" aria-label="Close member library">×</button><div class="skeleton skeleton-profile" aria-hidden="true"></div><p class="visually-hidden" role="status">Opening this member library…</p>';
   if (!ui.profileDialog.open) showDialog(ui.profileDialog);
   try {
     const snapshot = await getDoc(doc(db, "members", uid));
@@ -1246,7 +1304,7 @@ async function openProfile(uid) {
   } catch (error) {
     if (!current()) return;
     console.error(error);
-    ui.profileContent.innerHTML = `<p class="empty-state profile-error">${escapeHtml(error.message || "That member library could not open.")}</p>`;
+    ui.profileContent.innerHTML = `<button class="close-dialog" type="button" data-close="profileDialog" aria-label="Close member library">×</button><p class="empty-state profile-error" role="status">${escapeHtml(error.message || "That member library could not open.")}</p>`;
   }
 }
 async function saveProfileCard(event) {
@@ -1735,10 +1793,11 @@ onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snap
 ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid)); ui.dashboardOpenLibrary.addEventListener("click", () => openProfile(state.user.uid));
 ui.profileDialog.addEventListener("close", () => { state.profileRequest = null; state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
 ui.bookDialog.addEventListener("close", stopBookSocialSubscriptions);
+ui.catalogDialog.addEventListener("close", () => { state.catalogSearchToken = {}; state.catalogSelectionToken = {}; });
 ui.notificationButton.addEventListener("click", () => { renderNotifications(); showDialog(ui.notificationDialog); });
 ui.markNotificationsRead.addEventListener("click", markAllNotificationsRead);
-$("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.readingGoalForm.addEventListener("submit", saveReadingGoal); ui.readingGoalEnd.addEventListener("click", finishReadingGoal); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.memoryCancelEdit.addEventListener("click", resetMemoryEditor); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(localStorage.getItem("becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-ui.search.addEventListener("input", (event) => { state.search = event.target.value; sessionStorage.setItem("becShelfSearch", state.search); renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; sessionStorage.setItem("becShelfGenre", state.genre); renderBooks(); });
+$("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.readingGoalForm.addEventListener("submit", saveReadingGoal); ui.readingGoalEnd.addEventListener("click", finishReadingGoal); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.memoryCancelEdit.addEventListener("click", resetMemoryEditor); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(readPreference("localStorage", "becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+ui.search.addEventListener("input", (event) => { state.search = event.target.value; writePreference("sessionStorage", "becShelfSearch", state.search); renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; writePreference("sessionStorage", "becShelfGenre", state.genre); renderBooks(); });
 ui.shelfPrevious.addEventListener("click", () => moveShelf(-1)); ui.shelfNext.addEventListener("click", () => moveShelf(1)); ui.shelfExpand.addEventListener("click", toggleShelfLayout); ui.books.addEventListener("scroll", updateShelfNavigation, { passive: true }); window.addEventListener("resize", updateShelfNavigation);
 ui.surprise.addEventListener("click", pickRandomBook);
 document.addEventListener("click", async (event) => {
@@ -1853,8 +1912,6 @@ document.addEventListener("error", async (event) => {
 window.addEventListener("hashchange", () => updateMemoryView());
 $("memoryPhotoDialog").addEventListener("close", () => {
   $("memoryPhotoContent").replaceChildren();
-  const target = state.memoryPhotoTrigger;
-  if (!$("memories").hidden) (target?.isConnected ? target : $("memoriesHeading")).focus({ preventScroll: true });
   state.memoryPhotoTrigger = null;
 });
 updateMemoryView(false);
