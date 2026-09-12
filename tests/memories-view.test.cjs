@@ -18,7 +18,7 @@ function setup(hash = '') {
     state: { memories: [] }, ui: { memories: { classList: { toggle() {} } } },
     safeImageUrl: value => String(value || '').startsWith('https://') ? value : '',
     optimizedImageUrl: value => value, escapeHtml: value => String(value || '').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;'),
-    showDialog: dialog => { dialog.open = true; shown++; }, toast: value => notices.push(value),
+    dialogTriggers: new WeakMap(), showDialog: dialog => { dialog.open = true; shown++; }, toast: value => notices.push(value),
     recentFirst: rows => rows, memoryAssociationMarkup: () => '', isOfficer: () => false, renderEvents() {}
   });
   function $(id) { return nodes[id]; }
