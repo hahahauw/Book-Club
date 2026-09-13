@@ -3,8 +3,10 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 const source = readFileSync(require('node:path').join(__dirname, '../app.js'), 'utf8');
-const shared = source.slice(source.indexOf('async function existingShelfEntry('), source.indexOf('async function findBookConnections('));
-const handler = source.slice(source.indexOf('async function addClubBookToShelf('), source.indexOf('\nfunction openBookDetails('));
+const ast = require('acorn').parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
+function extract(name) { const node = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name); return source.slice(node.start, node.end); }
+const shared = ['existingShelfEntry','shelfEntryId','requireShelfOwner','createShelfEntry'].map(extract).join('\n');
+const handler = extract('addClubBookToShelf');
 const book = { id: 'public-1', title: 'A book', author: 'Author', isbn: '9780000000001', catalogKey: 'openlibrary:OL1W', coverUrl: 'https://example.test/cover.jpg', pageCount: 250, why: 'Another reader’s reason', comments: ['Do not copy'] };
 function setup(options = {}) {
   const rows = new Map(); const writes = []; const activities = [];
@@ -61,3 +63,4 @@ test('account switch during lookup cannot write to either account', async () => 
   const h = setup({ beforeRead: (state) => { state.user = { uid: 'someone-else' }; } }); await h.run();
   assert.equal(h.writes.length, 0); assert.equal(h.button.disabled, false);
 });
+
