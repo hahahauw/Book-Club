@@ -65,38 +65,6 @@ test('legacy page cover failure uses inert text instead of an inline handler', (
   assert.equal(dom.window.bookshelf.querySelectorAll('img').length, 0);
   dom.window.close();
 });
-for (const outcome of ['success', 'write failure', 'refresh failure']) {
-  test(`pinboard async submission: ${outcome}`, async () => {
-    let finish, writes = 0;
-    const pending = new Promise((resolve, reject) => { finish = () => outcome === 'write failure' ? reject(new Error('permission-denied')) : resolve({ id: 'saved' }); });
-    const dom = harness(['postBoard', 'runBusy'], '<form><textarea></textarea><button type="submit">Pin</button></form><p></p>', {
-      state: { user: { uid: 'alice' }, profile: { displayName: 'Reader' } }, isMember: () => true,
-      db: {}, collection: () => ({}), addDoc: () => { writes++; return pending; }, console: { error() {} }
-    });
-    const form = dom.window.document.querySelector('form'), input = form.querySelector('textarea');
-    input.value = 'My draft';
-    dom.window.ui = { boardText: input, boardStatus: dom.window.document.querySelector('p') };
-    if (outcome === 'refresh failure') form.reset = () => { throw new Error('UI reset failed'); };
-    let submission;
-    form.addEventListener('submit', event => { submission = dom.window.postBoard(event); });
-    const event = new dom.window.Event('submit', { bubbles: true, cancelable: true });
-    form.dispatchEvent(event);
-    assert.equal(event.currentTarget, null, 'Browser clears currentTarget after dispatch');
-    assert.equal(form.querySelector('button').disabled, true);
-    form.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
-    assert.equal(writes, 1, 'Busy button prevents duplicate write');
-    finish();
-    await pending.catch(() => {});
-    // The duplicate event completed immediately; drain the original async handler.
-    await new Promise(resolve => setImmediate(resolve));
-    if (outcome === 'success') { assert.equal(input.value, ''); assert.match(dom.window.ui.boardStatus.textContent, /Pinned/); }
-    if (outcome === 'write failure') { assert.equal(input.value, 'My draft'); assert.match(dom.window.ui.boardStatus.textContent, /Could not pin/); }
-    if (outcome === 'refresh failure') assert.match(dom.window.ui.boardStatus.textContent, /was saved/);
-    assert.equal(form.querySelector('button').disabled, false);
-    await submission;
-    dom.window.close();
-  });
-}
 test('malformed legacy comments do not crash normalization', () => {
   const dom = harness(['legacyCommentId', 'normalizeLegacyComments'], '', { state: { activeBookId: 'book' } });
   assert.equal(dom.window.normalizeLegacyComments(null).length, 0);

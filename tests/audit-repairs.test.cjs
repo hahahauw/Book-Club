@@ -45,13 +45,10 @@ test('pinboard avatar prefers current member photo and keeps snapshot fallback',
  const c=vm.createContext({state:{members:[{id:'u',photoURL:'https://current',displayName:'Current'}]},safeImageUrl:s=>s||'',optimizedImageUrl:s=>s,escapeHtml:String,initials:s=>s[0]});load(c,['pinAvatar']);
  const html=c.pinAvatar({memberId:'u',photoURL:'https://old',displayName:'Old'});assert.match(html,/src="https:\/\/current"/);assert.match(html,/data-pin-fallback="https:\/\/old"/);assert.match(html,/data-pin-initials="C"/);
 });
-test('goal subscription receives finished books beyond the old 500-entry cap',()=>{
- const rows=Array.from({length:600},(_,i)=>({id:String(i),data:()=>({status:'read',completedAt:100}),ref:{parent:{parent:{id:'u'}}}}));const state={readingGoal:{active:true},stopGoalProgress:null};
- const c=vm.createContext({state,db:{},collectionGroup:()=>({kind:'all entries'}),onSnapshot:(q,cb)=>{assert.equal(q.kind,'all entries');cb({docs:rows});return ()=>{}},renderReadingGoal(){},ui:{}});load(c,['syncGoalProgressSubscription']);c.syncGoalProgressSubscription();assert.equal(state.completedGoalBooks.length,600);assert.equal(state.goalProgressLoaded,true);
-});
 test('Cloudinary timeout aborts the request and offers retry',async()=>{
  let expire;const c=vm.createContext({state:{cloudName:'club',uploadPreset:'preset'},configuredUpload:()=>true,AbortController,FormData:class{append(){}},setTimeout:fn=>{expire=fn;return 1},clearTimeout(){},fetch:(_,options)=>new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(Error('aborted'))))});load(c,['uploadImage']);const upload=c.uploadImage({type:'image/jpeg',size:100});expire();await assert.rejects(upload,/timed out.*retry/);
 });
 test('batch stop aborts the current upload and marks remaining photos resumable',()=>{
  const controller=new AbortController(),state={memoryUploadController:controller},button={},ui={memoryStatus:{}};const c=vm.createContext({state,ui,$:()=>button});load(c,['stopMemoryUploads']);c.stopMemoryUploads();assert.equal(controller.signal.aborted,true);assert.equal(state.memoryUploadStopped,true);assert.equal(button.disabled,true);
 });
+

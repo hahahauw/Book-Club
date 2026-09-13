@@ -19,11 +19,11 @@ const ui = {
   month: $("bookOfMonth"), monthCommunity: $("monthCommunity"), monthRating: $("monthRating"), monthProgress: $("monthProgress"), monthForm: $("monthForm"), monthStars: $("monthStars"), monthFinished: $("monthFinished"), monthComment: $("monthComment"), monthMessage: $("monthMessage"), monthNotes: $("monthNotes"), monthOfficer: $("monthOfficer"), monthPicker: $("monthPicker"), saveMonth: $("saveMonthButton"),
   books: $("booksGrid"), shelfResultStatus: $("shelfResultStatus"), shelfNavigation: $("shelfNavigation"), shelfPrevious: $("shelfPreviousButton"), shelfExpand: $("shelfExpandButton"), shelfNext: $("shelfNextButton"), surprise: $("surpriseBookButton"), search: $("bookSearch"), genre: $("genreFilter"), openPending: $("openPendingButton"), pendingCount: $("pendingCount"), pendingDialog: $("pendingDialog"), pendingList: $("pendingList"),
   activityFeed: $("activityFeed"), activityStatus: $("activityStatus"),
-  readingGoalContent: $("readingGoalContent"), readingGoalTotal: $("readingGoalTotal"), readingGoalForm: $("readingGoalForm"), readingGoalTitle: $("readingGoalTitle"), readingGoalTarget: $("readingGoalTarget"), readingGoalEndDate: $("readingGoalEndDate"), readingGoalStart: $("readingGoalStartButton"), readingGoalEnd: $("readingGoalEndButton"), readingGoalStatus: $("readingGoalStatus"),
+  readingGoalContent: $("readingGoalContent"),
   dashboard: $("personalDashboard"), dashboardGreeting: $("dashboardGreeting"), dashboardOpenLibrary: $("dashboardOpenLibrary"), dashboardStats: $("dashboardStats"), dashboardMonth: $("dashboardMonth"), dashboardYear: $("dashboardYear"), dashboardReading: $("dashboardReading"), dashboardWanted: $("dashboardWanted"), dashboardFinished: $("dashboardFinished"), dashboardStatus: $("dashboardStatus"),
   discovery: $("discoveryCollections"), discoveryStatus: $("discoveryStatus"),
   events: $("eventsList"), eventForm: $("eventForm"), eventTitle: $("eventTitle"), eventDate: $("eventDate"), eventDetails: $("eventDetails"),
-  boardForm: $("boardForm"), boardText: $("boardText"), boardStatus: $("boardStatus"), boardGuestHint: $("boardGuestHint"), pinBoard: $("pinBoard"),
+  pinBoard: $("pinBoard"),
   memories: $("memoriesGrid"), memoryForm: $("memoryForm"), memoryImage: $("memoryImage"), memoryFile: $("memoryFile"), memoryCaption: $("memoryCaption"), memoryCategory: $("memoryCategory"), memoryEvent: $("memoryEvent"), memoryBook: $("memoryBook"), memoryEditId: $("memoryEditId"), memorySave: $("memorySaveButton"), memoryCancelEdit: $("memoryCancelEdit"), memoryStatus: $("memoryStatus"), inviteForm: $("inviteForm"), inviteEmail: $("inviteEmail"),
   uploadSettingsForm: $("uploadSettingsForm"), cloudName: $("cloudName"), uploadPreset: $("uploadPreset"), googleBooksKey: $("googleBooksKey"), uploadSettingsStatus: $("uploadSettingsStatus"), suggestionHint: $("suggestionHint"),
   members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
@@ -50,7 +50,7 @@ function writePreference(storageName, key, value) {
   catch { preferenceFallback.set(cacheKey, text); }
 }
 
-const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, dashboardShelfEntries: [], dashboardRatings: [], dashboardLoaded: false, dashboardRatingsLoaded: false, dashboardRatingsUnavailable: false, stopDashboardShelf: null, stopDashboardRatings: null, dashboardOwnerId: null, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", readingGoal: null, completedGoalBooks: [], goalProgressLoaded: false, stopGoalProgress: null, events: [], eventRsvps: new Map(), stopEventRsvps: null, eventRsvpOwnerId: null, rsvpBusy: new Set(), memories: [], memoryEditingId: null, boardPosts: [], shelfEntries: [], search: readPreference("sessionStorage", "becShelfSearch") || "", genre: readPreference("sessionStorage", "becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastRandomBookId: null, randomPickerActive: false, cloudName: readPreference("localStorage", "becCloudName") || "", uploadPreset: readPreference("localStorage", "becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
+const state = { user: null, profile: null, books: [], members: [], activities: [], activityLoaded: false, dashboardShelfEntries: [], dashboardLoaded: false, stopDashboardShelf: null, dashboardOwnerId: null, pendingBooks: [], currentPickId: null, monthAccent: "#d8e66f", ratings: [], monthRecommendationWhy: "", announcement: "", readingGoal: null, archiveLoaded: false, archiveLoading: false, events: [], eventRsvps: new Map(), stopEventRsvps: null, eventRsvpOwnerId: null, rsvpBusy: new Set(), memories: [], memoryEditingId: null, boardPosts: [], shelfEntries: [], search: readPreference("sessionStorage", "becShelfSearch") || "", genre: readPreference("sessionStorage", "becShelfGenre") || "", openProfileId: null, openProfileMember: null, profileActivities: [], stopRatings: null, stopMonthReasons: null, stopShelf: null, stopProfileActivity: null, stopPending: null, lastRandomBookId: null, randomPickerActive: false, cloudName: readPreference("localStorage", "becCloudName") || "", uploadPreset: readPreference("localStorage", "becUploadPreset") || "bookclub_unsigned", googleBooksKey: "", catalogResults: [], catalogBook: null, catalogTarget: "recommendation", catalogDuplicateConfirmation: "", activeBookId: null, legacyBookComments: [], bookComments: [], replyTarget: null, stopBookComments: null, lastCommentPost: null, bookReactions: [], reactionBookId: null, stopBookReactions: null, reactionBusy: false, notifications: [], stopNotifications: null };
 const REACTION_OPTIONS = [
   ["emotional", "😭", "Emotional"], ["slow_burn", "🐌", "Slow Burn"], ["mind_blown", "🤯", "Mind-blowing"], ["comfort_read", "🧸", "Comfort Read"], ["funny", "😂", "Funny"], ["devastating", "💀", "Devastating"], ["thought_provoking", "🧠", "Thought-provoking"], ["great_romance", "❤️", "Great Romance"], ["great_worldbuilding", "🌎", "Great Worldbuilding"], ["beautiful_writing", "✍️", "Beautiful Writing"]
 ];
@@ -180,20 +180,17 @@ function topGenre(entries) {
   entries.forEach((entry) => genreParts(entry).forEach((genre) => counts.set(genre, (counts.get(genre) || 0) + 1)));
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || "Still exploring";
 }
-function periodReadingStats(entries, ratings, start, end) {
+function periodReadingStats(entries, start, end) {
   const completed = entries.filter((entry) => entry.status === "read" && timeValue(entry.completedAt) >= start.valueOf() && timeValue(entry.completedAt) < end.valueOf());
   const withPages = completed.filter((entry) => pageCountValue(entry.pageCount));
   const pages = withPages.reduce((sum, entry) => sum + pageCountValue(entry.pageCount), 0);
-  const periodRatings = ratings.filter((rating) => timeValue(rating.updatedAt) >= start.valueOf() && timeValue(rating.updatedAt) < end.valueOf());
-  const highest = [...periodRatings].sort((a, b) => Number(b.stars || 0) - Number(a.stars || 0) || timeValue(b.updatedAt) - timeValue(a.updatedAt))[0];
-  return { completed, pages, pageBooks: withPages.length, genre: topGenre(completed), ratings: periodRatings, highest, highestBook: highest ? state.books.find((book) => book.id === highest.bookId) : null };
+  return { completed, pages, pageBooks: withPages.length, genre: topGenre(completed) };
 }
 function dashboardSummaryMarkup(title, stats, emptyCopy) {
-  if (!stats.completed.length && !stats.ratings.length) return `<p class="eyebrow">${escapeHtml(title.toUpperCase())}</p><h3>${escapeHtml(title)}</h3><p class="dashboard-summary-empty">${escapeHtml(emptyCopy)}</p>`;
+  if (!stats.completed.length) return `<p class="eyebrow">${escapeHtml(title.toUpperCase())}</p><h3>${escapeHtml(title)}</h3><p class="dashboard-summary-empty">${escapeHtml(emptyCopy)}</p>`;
   const pageLine = stats.pageBooks ? `<li><strong>${stats.pages.toLocaleString()}</strong><span>${stats.pageBooks === stats.completed.length ? "pages finished" : `known pages from ${stats.pageBooks} of ${stats.completed.length} finishes`}</span></li>` : "";
-  const ratingLine = stats.highest && stats.highestBook ? `<li><strong>${"★".repeat(Number(stats.highest.stars || 0))}</strong><span>highest rated: ${escapeHtml(stats.highestBook.title)}</span></li>` : "";
   const genreLine = stats.completed.some((entry) => genreParts(entry).length) ? `<li><strong>${escapeHtml(stats.genre)}</strong><span>most-read genre</span></li>` : "";
-  return `<p class="eyebrow">YOUR ${escapeHtml(title.toUpperCase())}</p><h3>${escapeHtml(title)}</h3><ul><li><strong>${stats.completed.length}</strong><span>${stats.completed.length === 1 ? "book" : "books"} finished</span></li>${pageLine}${ratingLine}${genreLine}</ul>`;
+  return `<p class="eyebrow">YOUR ${escapeHtml(title.toUpperCase())}</p><h3>${escapeHtml(title)}</h3><ul><li><strong>${stats.completed.length}</strong><span>${stats.completed.length === 1 ? "book" : "books"} finished</span></li>${pageLine}${genreLine}</ul>`;
 }
 function dashboardBookMarkup(book) {
   return `<article class="dashboard-book"><button type="button" data-dashboard-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title || "Untitled book")}"><span class="dashboard-book-cover">${coverMarkup(book, "", "lazy", 360)}</span><span class="dashboard-book-copy"><strong>${escapeHtml(book.title || "Untitled book")}</strong><small>${escapeHtml(book.author || "Unknown author")}</small>${pageCountValue(book.pageCount) ? `<em>${pageCountValue(book.pageCount).toLocaleString()} pages</em>` : ""}</span></button></article>`;
@@ -206,22 +203,20 @@ function renderDashboard() {
   if (!isMember()) { ui.dashboard.hidden = true; return; }
   ui.dashboard.hidden = false;
   const displayName = state.profile?.displayName || "reader";
-  ui.dashboardGreeting.textContent = `A private-at-a-glance view for ${displayName}, built from your personal shelf and club ratings.`;
+  ui.dashboardGreeting.textContent = `Welcome back, ${displayName}. Your public collection, at a glance.`;
   if (!state.dashboardLoaded) return;
   const entries = state.dashboardShelfEntries, reading = recentFirst(entries.filter((entry) => entry.status === "reading")), wanted = recentFirst(entries.filter((entry) => entry.status === "want-to-read")), finished = [...entries.filter((entry) => entry.status === "read")].sort((a, b) => timeValue(b.completedAt) - timeValue(a.completedAt) || String(b.date || "").localeCompare(String(a.date || "")));
   const readPages = finished.reduce((sum, entry) => sum + pageCountValue(entry.pageCount), 0), pageBooks = finished.filter((entry) => pageCountValue(entry.pageCount)).length;
-  const currentRating = state.dashboardRatings[0];
   const stats = [
     [finished.length, "books finished"], [reading.length, "currently reading"], [wanted.length, "waiting up next"], [topGenre(entries), "most-shelved genre"]
   ];
   if (pageBooks) stats.push([readPages.toLocaleString(), pageBooks === finished.length ? "pages across finished books" : `known pages across ${pageBooks} finished books`]);
-  if (currentRating) stats.push([`${Number(currentRating.stars).toFixed(1)} ★`, "your current club-pick rating"]);
   ui.dashboardStats.removeAttribute("aria-busy");
   ui.dashboardStats.innerHTML = stats.map(([value, label]) => `<article class="dashboard-stat"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></article>`).join("");
   const now = new Date(), monthStart = new Date(now.getFullYear(), now.getMonth(), 1), monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1), yearStart = new Date(now.getFullYear(), 0, 1), yearEnd = new Date(now.getFullYear() + 1, 0, 1);
   const monthTitle = now.toLocaleDateString(undefined, { month: "long" }), yearTitle = String(now.getFullYear());
-  ui.dashboardMonth.innerHTML = dashboardSummaryMarkup(monthTitle, periodReadingStats(entries, state.dashboardRatings, monthStart, monthEnd), "No newly tracked finishes or ratings yet this month. Your next ending will start the summary.");
-  ui.dashboardYear.innerHTML = dashboardSummaryMarkup(`${yearTitle} so far`, periodReadingStats(entries, state.dashboardRatings, yearStart, yearEnd), "No completion dates have been recorded this year yet. Older Read books still remain in your all-time total.");
+  ui.dashboardMonth.innerHTML = dashboardSummaryMarkup(monthTitle, periodReadingStats(entries, monthStart, monthEnd), "No dated finishes yet this month. Mark a book as read when you finish it.");
+  ui.dashboardYear.innerHTML = dashboardSummaryMarkup(`${yearTitle} so far`, periodReadingStats(entries, yearStart, yearEnd), "No completion dates have been recorded this year yet. Older Read books still remain in your all-time total.");
   renderDashboardBookRow(ui.dashboardReading, reading, "Nothing is marked Currently Reading yet.");
   renderDashboardBookRow(ui.dashboardWanted, wanted, "Your Want to Read section is waiting for a future favorite.");
   renderDashboardBookRow(ui.dashboardFinished, finished, "Finished books will collect here once you move them into Read.");
@@ -229,15 +224,14 @@ function renderDashboard() {
 }
 function syncDashboardSubscriptions() {
   if (!isMember()) {
-    state.stopDashboardShelf?.(); state.stopDashboardRatings?.(); state.stopDashboardShelf = null; state.stopDashboardRatings = null; state.dashboardOwnerId = null; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false; renderDashboard(); refreshSavedBookIndicators(); return;
+    state.stopDashboardShelf?.(); state.stopDashboardShelf = null; state.dashboardOwnerId = null; state.dashboardShelfEntries = []; state.dashboardLoaded = false; renderDashboard(); refreshSavedBookIndicators(); return;
   }
   if (state.dashboardOwnerId === state.user.uid && state.stopDashboardShelf) return;
-  state.stopDashboardShelf?.(); state.stopDashboardRatings?.(); state.dashboardOwnerId = state.user.uid; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false; renderDashboard();
+  state.stopDashboardShelf?.(); state.dashboardOwnerId = state.user.uid; state.dashboardShelfEntries = []; state.dashboardLoaded = false; renderDashboard();
   state.stopDashboardShelf = onSnapshot(collection(db, "memberShelves", state.user.uid, "entries"), (snapshot) => {
     state.dashboardShelfEntries = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.dashboardLoaded = true;
     if (state.openProfileId === state.user.uid) state.shelfEntries = state.dashboardShelfEntries; renderDashboard(); refreshSavedBookIndicators();
   }, (error) => { console.warn("Personal dashboard shelf unavailable:", error); state.dashboardLoaded = true; ui.dashboardStats.removeAttribute("aria-busy"); ui.dashboardStats.innerHTML = '<p class="empty-state">Your dashboard could not load, but My library is still available.</p>'; ui.dashboardStatus.textContent = "Check the published Firestore rules and try reopening the page."; });
-  state.dashboardRatings = state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: state.currentPickId || "" })); state.dashboardRatingsLoaded = true;
 }
 function openDashboardBook(entryId) {
   if (!isMember()) return; const entry = state.dashboardShelfEntries.find((book) => book.id === entryId); if (!entry) return;
@@ -425,70 +419,35 @@ function localDateKey(date = new Date()) {
   const year = date.getFullYear(), month = String(date.getMonth() + 1).padStart(2, "0"), day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-function goalProgressCount() {
-  if (!state.readingGoal) return 0;
-  if (!state.readingGoal.active) return Math.max(0, Number(state.readingGoal.finalProgress || 0));
-  const started = timeValue(state.readingGoal.startAt), end = state.readingGoal.endDate ? new Date(`${state.readingGoal.endDate}T23:59:59.999`).valueOf() : Number.POSITIVE_INFINITY;
-  if (!started) return 0;
-  return state.completedGoalBooks.filter((entry) => { const finished = timeValue(entry.completedAt); return finished >= started && finished <= end; }).length;
-}
 function renderReadingGoal() {
   const goal = state.readingGoal;
-  ui.readingGoalForm.hidden = !isOfficer();
-  ui.readingGoalEnd.hidden = !isOfficer() || !goal?.active;
-  ui.readingGoalStart.disabled = Boolean(goal?.active);
-  ui.readingGoalEnd.disabled = Boolean(goal?.active && !state.goalProgressLoaded);
-  if (!goal) {
-    ui.readingGoalTotal.textContent = "No active goal yet";
-    ui.readingGoalContent.innerHTML = '<p class="empty-state">The next club-wide reading challenge will appear here. Officers can start one whenever the club is ready.</p>';
-    return;
-  }
-  if (goal.active && !state.goalProgressLoaded) {
-    ui.readingGoalTotal.textContent = "Counting finished books…";
-    ui.readingGoalContent.innerHTML = '<div class="skeleton skeleton-activity" aria-hidden="true"></div>';
-    return;
-  }
-  const progress = goalProgressCount(), target = Math.max(1, Number(goal.target || 1)), percent = Math.min(100, Math.round((progress / target) * 100));
-  const start = dateTimeLabel(goal.startAt), deadline = goal.endDate ? dateLabel(goal.endDate) : "No deadline";
-  const status = goal.active ? (progress >= target ? "Goal reached — keep the streak going!" : `${target - progress} book${target - progress === 1 ? "" : "s"} to go`) : "This challenge is complete";
-  ui.readingGoalTotal.textContent = goal.active ? status : `Finished at ${progress} of ${target}`;
-  ui.readingGoalContent.innerHTML = `<div class="reading-goal-header"><div><h3>${escapeHtml(goal.title || "Our shared reading goal")}</h3><p>${goal.active ? "Every newly finished personal-shelf book adds one to this shared total." : "A finished chapter in the club’s reading history."}</p></div></div><div class="reading-goal-progress"><div class="reading-goal-progress-label"><strong>${progress} / ${target} books</strong><span>${percent}%</span></div><div class="reading-goal-track" role="progressbar" aria-label="Collective reading goal" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${Math.min(progress, target)}"><div class="reading-goal-fill" style="--goal-progress:${percent}%"></div></div></div><div class="reading-goal-stats"><div class="reading-goal-stat"><strong>${progress}</strong><span>books finished</span></div><div class="reading-goal-stat"><strong>${Math.max(0, target - progress)}</strong><span>still to go</span></div><div class="reading-goal-stat"><strong>${escapeHtml(start)}</strong><span>challenge started</span></div><div class="reading-goal-stat"><strong>${escapeHtml(deadline)}</strong><span>finish by</span></div></div>`;
+  ui.readingGoalContent.innerHTML = goal ? `<article class="archive-goal"><h3>${escapeHtml(goal.title || "Reading challenge")}</h3><p>Target: ${escapeHtml(goal.target || 0)} books${goal.endDate ? ` · Deadline: ${escapeHtml(dateLabel(goal.endDate))}` : ""}</p><p>${goal.active ? "This challenge was retired without a final total. Live progress is no longer calculated." : `Saved final total: ${Math.max(0, Number(goal.finalProgress || 0))} books.`}</p></article>` : '<p class="empty-state">No saved reading challenge.</p>';
 }
-function syncGoalProgressSubscription() {
-  if (!state.readingGoal?.active) {
-    state.stopGoalProgress?.(); state.stopGoalProgress = null; state.completedGoalBooks = []; state.goalProgressLoaded = true; renderReadingGoal(); return;
-  }
-  if (state.stopGoalProgress) return;
-  state.goalProgressLoaded = false; renderReadingGoal();
-  state.stopGoalProgress = onSnapshot(collectionGroup(db, "entries"), (snapshot) => {
-    state.completedGoalBooks = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id, ownerId: entry.ref.parent.parent?.id || "" })).filter((entry) => entry.status === "read");
-    state.goalProgressLoaded = true; renderReadingGoal();
-  }, (error) => {
-    console.warn("Collective reading progress unavailable:", error); state.goalProgressLoaded = false;
-    ui.readingGoalTotal.textContent = "Progress is temporarily unavailable";
-    ui.readingGoalContent.innerHTML = '<p class="empty-state">The goal is safe, but finished-book totals could not load. An officer may need to publish the included Firestore rules.</p>';
-  });
+async function loadClubArchive() {
+  if (state.archiveLoaded || state.archiveLoading) return;
+  state.archiveLoading = true;
+  $("archiveStatus").textContent = "Loading the club archive…";
+  $("archiveRetry").hidden = true;
+  const results = await Promise.allSettled([
+    getDocs(collection(db, "boardPosts")),
+    getDoc(doc(db, "siteSettings", "readingGoal"))
+  ]);
+  const [board, goal] = results;
+  if (board.status === "fulfilled") {
+    state.boardPosts = board.value.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderBoard();
+  } else ui.pinBoard.innerHTML = '<p class="empty-state">Archived notes could not load.</p>';
+  if (goal.status === "fulfilled") { state.readingGoal = goal.value.exists() ? goal.value.data() : null; renderReadingGoal(); }
+  else ui.readingGoalContent.innerHTML = '<p class="empty-state">The saved challenge could not load.</p>';
+  state.archiveLoading = false;
+  state.archiveLoaded = results.every((result) => result.status === "fulfilled");
+  $("archiveStatus").textContent = state.archiveLoaded ? "Archive loaded. No live progress or posting is enabled." : "Part of the archive could not load. You can retry.";
+  $("archiveRetry").hidden = state.archiveLoaded;
 }
-async function saveReadingGoal(event) {
-  event.preventDefault(); if (!isOfficer()) return;
-  const title = ui.readingGoalTitle.value.trim(), target = Number(ui.readingGoalTarget.value), endDate = ui.readingGoalEndDate.value;
-  if (!title || !Number.isInteger(target) || target < 1 || target > 1000) { ui.readingGoalStatus.textContent = "Add a name and choose a target from 1 to 1,000 books."; return; }
-  if (endDate && endDate < localDateKey()) { ui.readingGoalStatus.textContent = "Choose today or a future date for the new goal."; return; }
-  if (state.readingGoal?.active) { ui.readingGoalStatus.textContent = "Finish the current goal before starting another one."; return; }
-  await runBusy(ui.readingGoalStart, "Starting…", async () => {
-    try {
-      await setDoc(doc(db, "siteSettings", "readingGoal"), { title, target, metric: "books", startAt: serverTimestamp(), endDate, active: true, finalProgress: 0, updatedAt: serverTimestamp() });
-      ui.readingGoalForm.reset(); ui.readingGoalTarget.value = "50"; ui.readingGoalStatus.textContent = "The new challenge is live for everyone."; toast("Collective reading goal started.");
-    } catch (error) { console.error(error); ui.readingGoalStatus.textContent = "Could not start that goal. Check your connection and try again."; }
-  });
+function renderCommunityNotice() {
+  $("announcementSection").hidden = !state.announcement && !isOfficer();
+  $("communityManagement").hidden = !isOfficer();
 }
-async function finishReadingGoal() {
-  if (!isOfficer() || !state.readingGoal?.active || !window.confirm("Finish this reading goal at its current total?")) return;
-  await runBusy(ui.readingGoalEnd, "Finishing…", async () => {
-    try { await updateDoc(doc(db, "siteSettings", "readingGoal"), { active: false, finalProgress: goalProgressCount(), updatedAt: serverTimestamp() }); ui.readingGoalStatus.textContent = "Goal finished and preserved on the page."; toast("Reading goal completed."); }
-    catch (error) { console.error(error); ui.readingGoalStatus.textContent = "Could not finish the goal."; }
-  });
-}
+
 function syncEventRsvpSubscription() {
   if (!isMember()) {
     state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvpOwnerId = null; state.eventRsvps = new Map(); renderEvents(); return;
@@ -502,10 +461,11 @@ function syncEventRsvpSubscription() {
 function setAuthUi() {
   const name = state.profile?.displayName || state.user?.displayName || "reader";
   ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest";
-  ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.readingGoalForm.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember();
+  ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember();
   ui.suggestionHint.textContent = isMember() ? "Search for a book, then save it to My library or recommend it to the club." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review.";
   if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; }
-  syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); syncEventRsvpSubscription(); syncDashboardSubscriptions(); renderDashboard(); renderDiscovery(); renderMonth(); renderReadingGoal(); renderEvents(); renderMemoryOptions(); renderMemories(); renderBoard(); renderPending(); renderBookReactions();
+  $("libraryGuest").hidden = isMember(); renderCommunityNotice();
+  syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); syncEventRsvpSubscription(); syncDashboardSubscriptions(); renderDashboard(); renderDiscovery(); renderMonth(); renderEvents(); renderMemoryOptions(); renderMemories(); renderBoard(); renderPending(); renderBookReactions();
 }
 
 function optimizedImageUrl(url, width = 600) {
@@ -557,7 +517,7 @@ function renderBooks() {
   const selected = state.genre; ui.genre.innerHTML = '<option value="">All genres</option>' + allGenres.map((genre) => `<option value="${escapeHtml(genre)}">${escapeHtml(genre)}</option>`).join(""); ui.genre.value = selected;
   const books = visibleBooks();
   ui.shelfResultStatus.textContent = `${books.length} book${books.length === 1 ? "" : "s"} shown.`;
-  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title)}">${coverMarkup(book)}<span class="shelf-book-copy"><strong>${escapeHtml(book.title)}</strong><small>${escapeHtml(book.author || "Unknown author")}</small>${savedBookBadge(book)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
+  ui.books.innerHTML = books.length ? books.map((book) => `<button type="button" class="book-card" data-book-id="${escapeHtml(book.id)}" aria-label="Open ${escapeHtml(book.title)}"><span class="shelf-cover">${coverMarkup(book)}</span><span class="shelf-book-copy"><strong>${escapeHtml(book.title)}</strong><small>${escapeHtml(book.author || "Unknown author")}</small>${savedBookBadge(book)}</span></button>`).join("") : `<p class="empty-state">${state.books.length ? "No books match that search." : "The shelf is ready for its first recommendation."}</p>`;
   ui.monthPicker.innerHTML = '<option value="">Choose a book</option>' + recentFirst(state.books).map((book) => `<option value="${escapeHtml(book.id)}" ${book.id === state.currentPickId ? "selected" : ""}>${escapeHtml(book.title)} — ${escapeHtml(book.author)}</option>`).join("");
   renderMonth(); requestAnimationFrame(() => { if (!ui.books.classList.contains("is-expanded")) ui.books.scrollLeft = Math.min(scrollLeft, Math.max(0, ui.books.scrollWidth - ui.books.clientWidth)); updateShelfNavigation(); });
 }
@@ -639,7 +599,7 @@ function renderMonth() {
   syncMonthForm(mine);
   ui.monthNotes.innerHTML = state.ratings.filter((item) => item.comment).length ? state.ratings.filter((item) => item.comment).map((item) => `<article class="month-note"><strong>${escapeHtml(item.displayName || "Club member")}</strong><span>${"★".repeat(Number(item.stars || 0))}</span><p>${escapeHtml(item.comment)}</p></article>`).join("") : '<p class="empty-state">No discussion notes yet. Be the first to leave one.</p>';
 }
-function subscribeRatings() { state.stopRatings?.(); state.ratings = []; state.dashboardRatings = []; const book = currentBook(); if (!book) { renderDashboard(); return renderMonth(); } state.stopRatings = onSnapshot(collection(db, "bookOfMonthRatings", book.id, "members"), (snapshot) => { state.ratings = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.dashboardRatings = isMember() ? state.ratings.filter((rating) => rating.memberId === state.user.uid).map((rating) => ({ ...rating, bookId: book.id })) : []; renderMonth(); renderDashboard(); }, () => { ui.monthNotes.innerHTML = '<p class="empty-state">Ratings are unavailable right now.</p>'; state.dashboardRatings = []; renderDashboard(); }); }
+function subscribeRatings() { state.stopRatings?.(); state.ratings = []; const book = currentBook(); if (!book) { renderDashboard(); return renderMonth(); } state.stopRatings = onSnapshot(collection(db, "bookOfMonthRatings", book.id, "members"), (snapshot) => { state.ratings = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMonth(); renderDashboard(); }, () => { ui.monthNotes.innerHTML = '<p class="empty-state">Ratings are unavailable right now.</p>'; renderDashboard(); }); }
 function subscribeMonthRecommendation() { state.stopMonthReasons?.(); state.monthRecommendationWhy = ""; const book = currentBook(); if (!book) return renderMonth(); state.stopMonthReasons = onSnapshot(collection(db, "books", book.id, "recommendations"), (snapshot) => { state.monthRecommendationWhy = snapshot.docs.map((entry) => entry.data().reason).find(Boolean) || ""; renderMonth(); }, () => renderMonth()); }
 
 function ensureMonthAccentControl() { if ($("monthAccent")) return; const label = document.createElement("label"); label.innerHTML = 'Highlight colour <input id="monthAccent" type="color" aria-label="Book of the Month highlight colour">'; ui.monthOfficer.prepend(label); $("monthAccent").value = state.monthAccent; }
@@ -952,7 +912,7 @@ onAuthStateChanged(auth, async (user) => {
     if (ui.profileDialog.open) closeDialog(ui.profileDialog);
     state.stopNotifications?.(); state.stopNotifications = null; state.notifications = [];
     state.stopEventRsvps?.(); state.stopEventRsvps = null; state.eventRsvpOwnerId = null; state.eventRsvps = new Map();
-    state.stopDashboardShelf?.(); state.stopDashboardShelf = null; state.stopDashboardRatings?.(); state.stopDashboardRatings = null; state.dashboardOwnerId = null; state.dashboardShelfEntries = []; state.dashboardRatings = []; state.dashboardLoaded = false; state.dashboardRatingsLoaded = false; state.dashboardRatingsUnavailable = false;
+    state.stopDashboardShelf?.(); state.stopDashboardShelf = null; state.dashboardOwnerId = null; state.dashboardShelfEntries = []; state.dashboardLoaded = false;
   }
   state.user = user; state.profile = null;
   if (!user) return setAuthUi();
@@ -1149,26 +1109,37 @@ function memoryAssociationMarkup(memory) {
   const eventTitle = memory.eventId ? (event?.title || memory.eventTitleSnapshot || "") : "", bookTitle = memory.bookId ? (book?.title || memory.bookTitleSnapshot || "") : "";
   return `${eventTitle ? `<button type="button" class="memory-link" data-event-jump="${escapeHtml(memory.eventId || "")}">Event: ${escapeHtml(eventTitle)}</button>` : ""}${bookTitle ? (book ? `<button type="button" class="memory-link" data-book-id="${escapeHtml(book.id)}">Book: ${escapeHtml(bookTitle)}</button>` : `<span class="memory-association">Book: ${escapeHtml(bookTitle)}</span>`) : ""}`;
 }
+function routeForHash(hash) {
+  let id = "top";
+  try { id = decodeURIComponent(String(hash || "").replace(/^#/, "")) || "top"; } catch {}
+  if (["library", "personalDashboard", "dashboardHeading"].includes(id)) return { page: "libraryPage", nav: "#library", target: id };
+  if (id === "members") return { page: "readersPage", nav: "#members", target: id };
+  if (id === "memories") return { page: "memories", nav: "#community", target: "memoriesHeading" };
+  if (["archive", "board", "readingGoal"].includes(id)) return { page: "archivePage", nav: "#community", target: id };
+  if (["community", "events", "activity", "monthHeading", "announcementHeading"].includes(id)) return { page: "communityPage", nav: "#community", target: id };
+  return { page: "homeContent", nav: "#shelf", target: ["top", "shelf", "discovery"].includes(id) ? id : "top" };
+}
 function updateMemoryView(scroll = true) {
-  const memoriesOpen = location.hash === "#memories";
-  const home = $("homeContent"), gallery = $("memories");
-  const switched = home.hidden !== memoriesOpen;
-  home.hidden = memoriesOpen;
-  gallery.hidden = !memoriesOpen;
-  if (switched && !memoriesOpen) requestAnimationFrame(updateShelfNavigation);
+  const route = routeForHash(location.hash), navigation = {};
+  state.routeRequest = navigation;
+  state.activePage = route.page;
+  for (const id of ["homeContent", "libraryPage", "readersPage", "communityPage", "archivePage", "memories"]) $(id).hidden = id !== route.page;
+  if (route.target === "discovery") $("discoveryCollectionsPanel").open = true;
+  if (route.target === "announcementHeading") $("announcementSection").hidden = false;
+  if (route.page === "archivePage") loadClubArchive();
+  if (route.page === "homeContent") requestAnimationFrame(updateShelfNavigation);
   document.querySelectorAll('.desktop-nav a,.mobile-nav a').forEach((link) => {
-    if (link.getAttribute("href") === (location.hash || "#top")) link.setAttribute("aria-current", "page");
+    if (link.getAttribute("href") === route.nav) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
   if (!scroll) return;
-  if (memoriesOpen) {
-    if (!$("memoryPhotoDialog").open) $("memoriesHeading").focus({ preventScroll: true });
-    window.scrollTo({ top: 0, behavior: "instant" });
-  } else if (switched) {
-    let id = "top";
-    try { id = decodeURIComponent(location.hash.slice(1)) || "top"; } catch {}
-    ($(id) || $("top")).scrollIntoView({ block: "start", behavior: "instant" });
-  }
+  requestAnimationFrame(() => {
+    if (state.routeRequest !== navigation) return;
+    const target = $(route.target) || $("top");
+    const heading = target.matches("h1,h2") ? target : target.querySelector("h1,h2");
+    if (!document.querySelector("dialog[open]") && heading) { heading.setAttribute("tabindex", "-1"); heading.focus({ preventScroll: true }); }
+    target.scrollIntoView({ block: "start", behavior: "instant" });
+  });
 }
 function memoryPhotoSequence() {
   return memoryGroups(state.memories, $("memoryGroupBy")?.value || "recent").flatMap((group) => group.items);
@@ -1284,20 +1255,8 @@ function retryPinAvatar(image) {
   image.replaceWith(document.createTextNode(image.dataset.pinInitials || "?"));
 }
 function renderBoard() {
-  ui.pinBoard.innerHTML = state.boardPosts.length ? recentFirst(state.boardPosts).map((post) => `<article class="pin-note"><span class="pin-avatar">${pinAvatar(post)}</span><p>${escapeHtml(post.text)}</p><footer><span>${escapeHtml(post.displayName || "Club member")} · ${escapeHtml(dateTimeLabel(post.date))}</span>${isOfficer() ? `<button type="button" class="text-button" data-remove-pin="${escapeHtml(post.id)}">Remove</button>` : ""}</footer></article>`).join("") : '<p class="empty-state">Nothing pinned yet. The board is ready for its first note.</p>';
+  ui.pinBoard.innerHTML = state.boardPosts.length ? recentFirst(state.boardPosts).map((post) => `<article class="pin-note"><span class="pin-avatar">${pinAvatar(post)}</span><p>${escapeHtml(post.text)}</p><footer><span>${escapeHtml(post.displayName || "Club member")} · ${escapeHtml(dateTimeLabel(post.date))}</span></footer></article>`).join("") : '<p class="empty-state">No archived pinboard notes.</p>';
 }
-async function postBoard(event) {
-  event.preventDefault(); if (!isMember()) return;
-  const text = ui.boardText.value.trim(); if (!text) return;
-  const form = event.currentTarget;
-  const button = form.querySelector("button[type=submit]");
-  await runBusy(button, "Pinning…", async () => {
-    let saved = false;
-    try { await addDoc(collection(db, "boardPosts"), { text, memberId: state.user.uid, displayName: state.profile.displayName || "Club member", photoURL: state.profile.photoURL || "", date: new Date().toISOString() }); saved = true; if (form.isConnected) form.reset(); ui.boardStatus.textContent = "Pinned for the club."; }
-    catch (error) { console.error(error); ui.boardStatus.textContent = saved ? "Your note was saved. Reopen the page to refresh the board." : "Could not pin that note."; }
-  });
-}
-
 function renderMembers() {
   ui.members.removeAttribute("aria-busy");
   ui.members.innerHTML = state.members.length ? state.members.map((member) => {
@@ -1325,9 +1284,9 @@ async function openProfile(uid) {
     state.openProfileMember = { ...member, id: uid };
     ui.profileDialog.setAttribute("aria-label", `${member.displayName || "Club member"}’s member library`);
     const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 360))}" alt="Portrait of ${escapeHtml(member.displayName || "club member")}" decoding="async" width="180" height="180">` : escapeHtml(initials(member.displayName));
-    const shelfForm = own && isMember() ? `<button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Add a book</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><p id="shelfVisibility" class="form-message">Your shelf, reading status, finish dates and notes are visible to everyone, including visitors who are signed out.</p><button id="openCatalogFromShelf" type="button" class="text-button">Find a book automatically</button><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Page count <input id="shelfPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>Public shelf note (optional) <textarea id="shelfNote" aria-describedby="shelfVisibility" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
-    const customize = own && isMember() ? `<details class="profile-customize"><summary>Customize my library card</summary><form id="profileForm"><label>Display name <input id="profileNameInput" maxlength="60" value="${escapeHtml(member.displayName || "")}"></label><label>Short bio <textarea id="profileBioInput" maxlength="80">${escapeHtml(member.bio || "")}</textarea></label><label>Library colour <input id="profileColorInput" type="color" value="${accent}"></label><label>Public avatar URL <input id="profilePhotoInput" type="url" maxlength="500" value="${escapeHtml(member.photoURL || "")}" placeholder="Optional image link"></label><label>Or upload an avatar <input id="profilePhotoFile" type="file" accept="image/*"></label><label>Favourite genre <input id="profileGenreInput" maxlength="40" value="${escapeHtml(member.favoriteGenre || "")}" placeholder="e.g. Fantasy"></label><label>Currently reading <input id="profileCurrentInput" maxlength="100" value="${escapeHtml(member.currentlyReading || "")}" placeholder="A book you are into right now"></label><label class="checkbox-line"><input id="profileShowStats" type="checkbox" ${member.showReadingStats !== false ? "checked" : ""}> Show summary cards on my profile</label><p class="activity-privacy-note">Hiding summary cards does not make your shelf private. Books, reading status, finish dates and shelf notes remain public.</p><label class="checkbox-line"><input id="profileShareActivity" type="checkbox" ${member.shareActivity === true ? "checked" : ""}> Share meaningful reading activity</label><p class="activity-privacy-note">The activity feed shares book titles and reading actions, without copying email addresses, notes or comment text. Shelf notes and discussion comments remain public in their original locations.</p>${isOfficer() ? `<label>Club role label <select id="profileTitleInput"><option value="Officer" ${member.clubTitle !== "President" ? "selected" : ""}>Officer</option><option value="President" ${member.clubTitle === "President" ? "selected" : ""}>President</option></select></label>` : ""}<button type="submit" class="text-button">Save library card</button></form></details>` : "";
-    ui.profileContent.innerHTML = `<div class="profile-layout" style="--accent:${accent}"><aside class="profile-side"><div class="profile-avatar">${avatar}</div><h2>${escapeHtml(member.displayName || "Club member")}</h2><p>${escapeHtml(member.bio || "A reader in the Book Enthusiasts Club.")}</p><p>Member since ${escapeHtml(dateLabel(String(member.joinedAt || "").slice(0, 10)))}</p><div class="profile-meta">${member.clubTitle ? `<span>${escapeHtml(member.clubTitle)}</span>` : ""}${member.favoriteGenre ? `<span>Usually reading ${escapeHtml(member.favoriteGenre)}</span>` : ""}${member.currentlyReading ? `<span>Currently: ${escapeHtml(member.currentlyReading)}</span>` : ""}</div>${customize}</aside><section class="profile-library"><p class="eyebrow">PUBLIC READER LIBRARY</p><h3>${own ? "My shelf" : `${escapeHtml(member.displayName || "Their")}’s shelf`}</h3><div id="libraryStats" class="library-stats"><span class="skeleton skeleton-pill" aria-hidden="true"></span><span class="skeleton skeleton-pill" aria-hidden="true"></span></div><div id="readingSnapshot" class="profile-reading-summary" aria-live="polite"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div><section class="profile-favorites"><div class="profile-section-heading"><h4>Top 3 favorites</h4><p>${own ? "Open a shelf book to pin or unpin it." : "A small peek at their all-time picks."}</p></div><div id="favoriteBooks" class="favorite-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><div class="library-controls"><label>Search this library<input id="librarySearch" type="search" placeholder="Title, author, or genre"></label><label>Reading status<select id="libraryFilter"><option value="">All books</option><option value="reading">Reading</option><option value="want-to-read">Want to read</option><option value="read">Read</option></select></label><label>Sort by<select id="librarySort"><option value="added">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option><option value="finished">Recently finished</option></select></label><button id="libraryClear" class="text-button" type="button">Clear filters</button></div><p id="libraryResults" class="form-message" role="status"></p><div id="personalBooks" class="personal-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div>${shelfForm}<section class="profile-activity"><h4>Recent reading activity</h4><div id="memberActivityList" aria-busy="true"><div class="skeleton skeleton-activity" aria-hidden="true"></div></div></section></section></div>`;
+    const shelfForm = own && isMember() ? `<button id="openCatalogFromShelf" type="button" class="button">Add a book</button><button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Enter a book manually</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><p id="shelfVisibility" class="form-message">Your shelf, reading status, finish dates and notes are visible to everyone, including visitors who are signed out.</p><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Page count <input id="shelfPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>Public shelf note (optional) <textarea id="shelfNote" aria-describedby="shelfVisibility" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
+    const customize = own && isMember() ? `<details class="profile-customize"><summary>Customize my library card</summary><form id="profileForm"><label>Display name <input id="profileNameInput" maxlength="60" value="${escapeHtml(member.displayName || "")}"></label><label>Short bio <textarea id="profileBioInput" maxlength="80">${escapeHtml(member.bio || "")}</textarea></label><label>Library colour <input id="profileColorInput" type="color" value="${accent}"></label><label>Public avatar URL <input id="profilePhotoInput" type="url" maxlength="500" value="${escapeHtml(member.photoURL || "")}" placeholder="Optional image link"></label><label>Or upload an avatar <input id="profilePhotoFile" type="file" accept="image/*"></label><label>Favourite genre <input id="profileGenreInput" maxlength="40" value="${escapeHtml(member.favoriteGenre || "")}" placeholder="e.g. Fantasy"></label><label class="checkbox-line"><input id="profileShowStats" type="checkbox" ${member.showReadingStats !== false ? "checked" : ""}> Show summary cards on my profile</label><p class="activity-privacy-note">Hiding summary cards does not make your shelf private. Books, reading status, finish dates and shelf notes remain public.</p><label class="checkbox-line"><input id="profileShareActivity" type="checkbox" ${member.shareActivity === true ? "checked" : ""}> Share meaningful reading activity</label><p class="activity-privacy-note">The activity feed shares book titles and reading actions, without copying email addresses, notes or comment text. Shelf notes and discussion comments remain public in their original locations.</p>${isOfficer() ? `<label>Club role label <select id="profileTitleInput"><option value="Officer" ${member.clubTitle !== "President" ? "selected" : ""}>Officer</option><option value="President" ${member.clubTitle === "President" ? "selected" : ""}>President</option></select></label>` : ""}<button type="submit" class="text-button">Save library card</button></form></details>` : "";
+    ui.profileContent.innerHTML = `<div class="profile-layout" style="--accent:${accent}"><aside class="profile-side"><div class="profile-avatar">${avatar}</div><h2>${escapeHtml(member.displayName || "Club member")}</h2><p>${escapeHtml(member.bio || "A reader in the Book Enthusiasts Club.")}</p><p>Member since ${escapeHtml(dateLabel(String(member.joinedAt || "").slice(0, 10)))}</p><div class="profile-meta">${member.clubTitle ? `<span>${escapeHtml(member.clubTitle)}</span>` : ""}${member.favoriteGenre ? `<span>Usually reading ${escapeHtml(member.favoriteGenre)}</span>` : ""}</div>${customize}</aside><section class="profile-library"><p class="eyebrow">PUBLIC READER LIBRARY</p><h3>${own ? "My shelf" : `${escapeHtml(member.displayName || "Their")}’s shelf`}</h3><div id="libraryStats" class="library-stats"><span class="skeleton skeleton-pill" aria-hidden="true"></span><span class="skeleton skeleton-pill" aria-hidden="true"></span></div><div id="readingSnapshot" class="profile-reading-summary" aria-live="polite"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div><section class="profile-favorites"><div class="profile-section-heading"><h4>Top 3 favorites</h4><p>${own ? "Open a shelf book to pin or unpin it." : "A small peek at their all-time picks."}</p></div><div id="favoriteBooks" class="favorite-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><div class="library-controls"><label>Search this library<input id="librarySearch" type="search" placeholder="Title, author, or genre"></label><label>Reading status<select id="libraryFilter"><option value="">All books</option><option value="reading">Reading</option><option value="want-to-read">Want to read</option><option value="read">Read</option></select></label><label>Sort by<select id="librarySort"><option value="added">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option><option value="finished">Recently finished</option></select></label><button id="libraryClear" class="text-button" type="button">Clear filters</button></div><p id="libraryResults" class="form-message" role="status"></p><div id="personalBooks" class="personal-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div>${shelfForm}<section class="profile-activity"><h4>Recent reading activity</h4><div id="memberActivityList" aria-busy="true"><div class="skeleton skeleton-activity" aria-hidden="true"></div></div></section></section></div>`;
     $("profileForm")?.addEventListener("submit", saveProfileCard);
     $("shelfForm")?.addEventListener("submit", addShelfBook);
     ["librarySearch", "libraryFilter", "librarySort"].forEach((id) => $(id).addEventListener(id === "librarySearch" ? "input" : "change", () => renderShelf(state.shelfEntries)));
@@ -1360,7 +1319,6 @@ async function saveProfileCard(event) {
         bio: $("profileBioInput").value.trim(),
         themeColor: $("profileColorInput").value,
         favoriteGenre: $("profileGenreInput")?.value.trim() || "",
-        currentlyReading: $("profileCurrentInput")?.value.trim() || "",
         shareActivity: nextShareActivity,
         showReadingStats: Boolean($("profileShowStats")?.checked)
       };
@@ -1810,8 +1768,7 @@ onSnapshot(collection(db, "books"), (snapshot) => { state.books = snapshot.docs.
 onSnapshot(collection(db, "members"), (snapshot) => { state.members = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMembers(); renderBoard(); renderMonth(); renderNotifications(); renderDashboard(); if (state.activityLoaded) renderActivityFeed(); }, () => { ui.members.removeAttribute("aria-busy"); ui.members.innerHTML = '<p class="empty-state">Member libraries are unavailable right now.</p>'; });
 onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc"), limit(20)), (snapshot) => { state.activities = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); state.activityLoaded = true; renderActivityFeed(); renderDiscovery(); }, (error) => { console.warn("Activity feed unavailable:", error); state.activityLoaded = true; ui.activityFeed.removeAttribute("aria-busy"); ui.activityFeed.innerHTML = '<p class="empty-state">Recent club activity could not load. The rest of the site is still available.</p>'; ui.activityStatus.textContent = "Recent club activity could not load."; renderDiscovery(); });
 onSnapshot(doc(db, "siteSettings", "currentPick"), (snapshot) => { const pick = snapshot.data() || {}; state.currentPickId = pick.bookId || null; state.monthAccent = /^#[0-9a-f]{6}$/i.test(pick.highlightColor || "") ? pick.highlightColor : "#d8e66f"; if ($("monthAccent")) $("monthAccent").value = state.monthAccent; renderBooks(); subscribeRatings(); subscribeMonthRecommendation(); }, () => { toast("Book of the Month could not load."); });
-onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement yet—check back after the next library meeting."; if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
-onSnapshot(doc(db, "siteSettings", "readingGoal"), (snapshot) => { state.readingGoal = snapshot.exists() ? snapshot.data() : null; syncGoalProgressSubscription(); renderReadingGoal(); }, (error) => { console.warn("Reading goal unavailable:", error); ui.readingGoalTotal.textContent = "Reading goal unavailable"; ui.readingGoalContent.innerHTML = '<p class="empty-state">The shared goal could not load. The rest of the site is still available.</p>'; });
+onSnapshot(doc(db, "siteSettings", "announcement"), (snapshot) => { state.announcement = snapshot.data()?.text || ""; ui.announcementText.textContent = state.announcement || "No announcement is published."; renderCommunityNotice(); if (isOfficer()) ui.announcementInput.value = state.announcement; }, () => { ui.announcementText.textContent = "The club announcement could not load right now."; });
 onSnapshot(doc(db, "siteSettings", "catalog"), (snapshot) => {
   const settings = snapshot.data() || {};
   state.googleBooksKey = String(settings.googleBooksApiKey || "").trim();
@@ -1825,8 +1782,11 @@ onSnapshot(doc(db, "siteSettings", "catalog"), (snapshot) => {
 }, (error) => console.warn("Catalogue settings unavailable:", error));
 onSnapshot(collection(db, "events"), (snapshot) => { state.events = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMemoryOptions(); renderMemories(); renderNotifications(); }, () => { ui.events.innerHTML = '<p class="empty-state">Events are unavailable right now.</p>'; });
 onSnapshot(collection(db, "memories"), (snapshot) => { state.memories = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderMemories(); }, () => { ui.memories.innerHTML = '<p class="empty-state">Reading memories are unavailable right now.</p>'; });
-onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })); renderBoard(); }, () => { ui.pinBoard.innerHTML = '<p class="empty-state">The pinboard is taking a short break.</p>'; });
 
+$("librarySignIn").addEventListener("click", signIn);
+$("dashboardAddBook").addEventListener("click", () => openCatalog("shelf"));
+$("archiveRetry").addEventListener("click", loadClubArchive);
+document.querySelectorAll("[data-find-book]").forEach((button) => button.addEventListener("click", () => openCatalog(isMember() ? "shelf" : "recommendation")));
 ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid)); ui.dashboardOpenLibrary.addEventListener("click", () => openProfile(state.user.uid));
 ui.profileDialog.addEventListener("close", () => { state.profileRequest = null; state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
 ui.bookDialog.addEventListener("close", stopBookSocialSubscriptions);
@@ -1834,7 +1794,7 @@ $("catalogBackButton").addEventListener("click", returnToCatalogResults);
 ui.catalogDialog.addEventListener("close", () => { state.catalogSearchToken = {}; state.catalogSelectionToken = {}; });
 ui.notificationButton.addEventListener("click", () => { renderNotifications(); showDialog(ui.notificationDialog); });
 ui.markNotificationsRead.addEventListener("click", markAllNotificationsRead);
-$("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.readingGoalForm.addEventListener("submit", saveReadingGoal); ui.readingGoalEnd.addEventListener("click", finishReadingGoal); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.memoryCancelEdit.addEventListener("click", resetMemoryEditor); ui.boardForm.addEventListener("submit", postBoard); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(readPreference("localStorage", "becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+$("openSuggestionButton").addEventListener("click", () => openCatalog("recommendation")); ui.openPending.addEventListener("click", () => showDialog(ui.pendingDialog)); ui.suggestionForm.addEventListener("submit", submitSuggestion); ui.catalogSearchForm.addEventListener("submit", submitCatalogSearch); ui.catalogDestination.addEventListener("change", updateCatalogDestination); ui.catalogSave.addEventListener("click", saveCatalogBook); ui.catalogManual.addEventListener("click", openManualCatalogEntry); ui.monthForm.addEventListener("submit", saveRating); ui.saveMonth.addEventListener("click", saveMonth); ui.announcementForm.addEventListener("submit", saveAnnouncement); ui.eventForm.addEventListener("submit", addEvent); ui.memoryForm.addEventListener("submit", addMemory); ui.memoryCancelEdit.addEventListener("click", resetMemoryEditor); ui.inviteForm.addEventListener("submit", addInvite); ui.uploadSettingsForm.addEventListener("submit", saveUploadSettings); ui.theme.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")); setTheme(readPreference("localStorage", "becTheme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 ui.search.addEventListener("input", (event) => { state.search = event.target.value; writePreference("sessionStorage", "becShelfSearch", state.search); renderBooks(); }); ui.genre.addEventListener("change", (event) => { state.genre = event.target.value; writePreference("sessionStorage", "becShelfGenre", state.genre); renderBooks(); });
 ui.shelfPrevious.addEventListener("click", () => moveShelf(-1)); ui.shelfNext.addEventListener("click", () => moveShelf(1)); ui.shelfExpand.addEventListener("click", toggleShelfLayout); ui.books.addEventListener("scroll", updateShelfNavigation, { passive: true }); window.addEventListener("resize", updateShelfNavigation);
 ui.surprise.addEventListener("click", pickRandomBook);
@@ -1902,11 +1862,7 @@ document.addEventListener("click", async (event) => {
     try { await deleteDoc(doc(db, "memories", removeMemory.dataset.removeMemory)); if (state.memoryEditingId === removeMemory.dataset.removeMemory) resetMemoryEditor(); toast("Memory removed."); }
     catch (error) { console.error(error); toast("Could not remove that memory."); }
   }
-  const removePin = event.target.closest("[data-remove-pin]");
-  if (removePin && isOfficer() && window.confirm("Remove this note from the club pinboard?")) {
-    try { await deleteDoc(doc(db, "boardPosts", removePin.dataset.removePin)); toast("Pin removed."); }
-    catch (error) { console.error(error); toast("Could not remove that pin."); }
-  }
+
 });
 async function retryCoverImage(image) {
   const isbn = String(image.dataset.coverIsbn || "").replace(/[^0-9X]/gi, ""); const googleId = image.dataset.googleBooksId || ""; const current = image.currentSrc || image.src;
@@ -1952,7 +1908,7 @@ $("memoryPhotoDialog").addEventListener("close", () => {
   $("memoryPhotoContent").replaceChildren();
   state.memoryPhotoTrigger = null;
 });
-updateMemoryView(false);
+updateMemoryView(Boolean(location.hash));
 
 ui.monthForm.addEventListener("input", rememberMonthDraft);
 ui.monthForm.addEventListener("change", rememberMonthDraft);
