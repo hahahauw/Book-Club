@@ -1,5 +1,11 @@
 # First security and reliability repair batch
 
+## Batch 2 retention and access boundary — 13 September 2026
+
+The pinboard and collective goal are retired in the current frontend, with their stored records retained for on-demand archival reading. No production data is deleted or marked complete, and no deployed Firestore rules are changed. The archive does not calculate a final count for an unfinished goal. Historical profile `currentlyReading` values remain stored but are no longer displayed/edited by the current client.
+
+This is product retirement, not server-side revocation: an older deployed client may still write wherever existing production rules permit it. A later rules change must follow the production-parity/schema review below. Invitation requirements, member/officer permissions, public shelf visibility and moderation policy are unchanged. Opening personal registration still depends on separate access and moderation work.
+
 ## Catalogue and visibility baseline — 12 September 2026
 
 The follow-up repair starts from `522ddeaf240414f0c9b7f5294a0f8002920fa1dd`. It changes frontend disclosure and catalogue payload preparation, with no rule deployment, permission changes or stored-data migration.

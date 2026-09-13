@@ -5,7 +5,7 @@ The website has no build dependencies. These test-only tools can be installed ou
 ```sh
 test_tools="$(mktemp -d)"
 npm install --prefix "$test_tools" --no-audit --no-fund acorn@8.18.0 jsdom@30.0.1 @firebase/rules-unit-testing@5.0.2 firebase@12.19.0 firebase-tools@14.22.0
-NODE_PATH="$test_tools/node_modules" node --test tests/frontend.test.cjs tests/ui.test.cjs tests/audit-repairs.test.cjs tests/batch-one.test.cjs tests/club-shelf.test.cjs tests/events-memories-tools.test.cjs tests/library-tools.test.cjs tests/memories-view.test.cjs tests/navigation-catalog-tools.test.cjs tests/qol-audit.test.cjs tests/visual-regressions.test.cjs tests/catalogue-baseline.test.cjs
+NODE_PATH="$test_tools/node_modules" node --test tests/frontend.test.cjs tests/ui.test.cjs tests/audit-repairs.test.cjs tests/batch-one.test.cjs tests/batch-two.test.cjs tests/club-shelf.test.cjs tests/events-memories-tools.test.cjs tests/library-tools.test.cjs tests/memories-view.test.cjs tests/navigation-catalog-tools.test.cjs tests/qol-audit.test.cjs tests/visual-regressions.test.cjs tests/catalogue-baseline.test.cjs
 NODE_PATH="$test_tools/node_modules" "$test_tools/node_modules/.bin/firebase" emulators:exec --only firestore --project demo-bec-security --config firebase.test.json 'node --test tests/firestore.test.cjs'
 node --check app.js
 node --check book-catalog.js
@@ -25,3 +25,9 @@ UI refresh: with the same test dependencies, run `NODE_PATH="$test_tools/node_mo
 The emulator tests verify that normalized metadata fits all three current schemas and that signed-out visitors can read shelf notes even when summary cards are hidden. That second check documents the current public policy; it is not a private-note feature.
 
 JSDOM and the source checks in `visual-regressions.test.cjs` do not establish rendered layout or contrast. Before merging visual changes, check both themes at 320, 390, 768, 820, 821, 1024 and desktop widths. Select first/middle/last results, return to results, use Escape, and navigate to section headings with both guest and wrapped signed-in headers. Verify phone keyboard behavior on a device. Keep writes in a staging/test account.
+
+## Batch 2 simplification checks
+
+`batch-two.test.cjs` initializes the current application with isolated database boundaries. It checks primary and legacy hashes, matching navigation, visible heading focus, guest/member/officer transitions, preserved filters, archive caching/concurrent reads/partial failure, read-only archive controls, dated finish summaries and cover/caption structure. The active goal scan and pinboard-write tests were retired along with that code; archive tests cover the preserved content.
+
+For rendered release checks, visit Books → My library → Readers → Community → Memories → archive and use Back/Forward. Repeat in both themes and at the widths above. Verify library sign-in continuation, catalogue/manual entry and nested dialog focus. Confirm that `#board` and `#readingGoal` open the archive without starting any whole-library scan. Do not interpret CSS parsing or JSDOM focus assertions as successful visual validation.

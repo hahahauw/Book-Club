@@ -1,8 +1,8 @@
 /* Reading-room layout: shared tokens stay in styles.css; these rules refine presentation. */
 .skip-link { position:fixed; top:8px; left:12px; z-index:100; padding:12px; color:var(--surface); background:var(--ink); transform:translateY(-160%); }
 .skip-link:focus { transform:none; }
-.hero { padding-block:48px 32px; }
-.hero h1 { max-width:860px; font-size:clamp(2.6rem,6.5vw,5rem); line-height:1.02; }
+.hero { padding-block:36px 24px; }
+.hero h1 { max-width:860px; font-size:clamp(2.4rem,5vw,4rem); line-height:1.02; }
 .hero-copy { margin-block:18px; font-size:16px; }
 .hero::after { display:none; }
 .member-note { margin-top:18px; }
@@ -39,16 +39,33 @@ summary:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid v
 #shelfExpandButton { justify-self:center; }
 .books-grid { align-items:start; }
 .books-grid.is-expanded { grid-auto-flow:row; grid-template-columns:repeat(auto-fill,minmax(145px,1fr)); grid-auto-columns:auto; overflow:visible; }
-/* Fill each frame edge to edge; cropping is intentional for differing cover ratios. */
-.book-card { display:block; aspect-ratio:2/3; padding:0; border:0; color:#fff; background:transparent; box-shadow:none; }
-.book-card > img { position:absolute; inset:0; display:block; width:100%; height:100%; aspect-ratio:auto; object-fit:cover; object-position:center; }
-.book-card > .fallback-cover { position:static; inset:auto; display:grid; width:100%; height:auto; min-height:0; aspect-ratio:2/3; opacity:1; color:#fff; }
-.book-card > .shelf-book-copy { position:absolute; inset:auto 0 0; display:block; width:100%; padding:32px 10px 10px; opacity:0; color:#fff; background:linear-gradient(transparent,rgba(0,0,0,.85)); -webkit-line-clamp:unset; pointer-events:none; }
-.shelf-book-copy strong { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
-.shelf-book-copy small { display:none; }
-.book-card:hover > .shelf-book-copy,.book-card:focus-visible > .shelf-book-copy { opacity:1; }
-.book-card:hover { transform:translateY(-3px); box-shadow:var(--shadow); }
-@media (hover:none) { .book-card > .shelf-book-copy { opacity:1; } .book-card:hover { transform:none; } }
+/* Covers keep their fixed frame; title, author and saved status stay readable below. */
+.book-card { display:block; aspect-ratio:auto; padding:0; border:0; border-radius:0; overflow:visible; color:var(--ink); background:transparent; box-shadow:none; }
+.shelf-cover { position:relative; display:block; width:100%; aspect-ratio:2/3; overflow:hidden; border-radius:10px; background:var(--surface); }
+.book-card .shelf-cover > img { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:cover; object-position:center; }
+.book-card .shelf-cover > .fallback-cover { position:static; display:grid; width:100%; height:100%; min-height:0; opacity:1; color:#fff; }
+.book-card > .shelf-book-copy { position:static; display:block; width:100%; padding:10px 0 0; opacity:1; color:var(--ink); background:none; -webkit-line-clamp:unset; pointer-events:none; }
+.shelf-book-copy strong { display:block; font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
+.shelf-book-copy small { display:block; margin-top:4px; color:var(--muted); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+.book-card:hover { transform:translateY(-3px); box-shadow:none; }
+@media (hover:none) { .book-card:hover { transform:none; } }
+.destination-intro { padding-block:36px 20px; }
+.destination-intro h1,.members-section h1,.memories-page h1 { margin:0 0 16px; font:600 clamp(2rem,4vw,3.5rem)/1.1 "Playfair Display",serif; letter-spacing:-.025em; }
+.destination-intro p { max-width:64ch; }
+.destination-intro .text-action { margin-left:12px; }
+.secondary-links { display:flex; flex-wrap:wrap; gap:12px 24px; }
+.secondary-links a { display:inline-flex; align-items:center; min-height:44px; color:var(--ink); }
+.discovery-panel { margin-block:12px 40px; border-top:1px solid var(--line); }
+.discovery-panel > summary,.reading-history > summary,.community-management > summary { min-height:48px; }
+.community-management { padding-block:20px 40px; }
+.archive-section { padding-block:24px; }
+.archive-section:last-child { padding-bottom:60px; }
+.archive-goal { padding:20px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.reading-history { margin-block:16px 24px; border-top:1px solid var(--line); }
+.dashboard-header { flex-wrap:wrap; }
+.dashboard-header > div { flex:1 1 280px; }
+#libraryPage,#readersPage,#communityPage,#archivePage { min-height:65vh; }
+.mobile-nav { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .discovery-section { margin-bottom:32px; }
 .discovery-filter { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-block:16px; }
 .discovery-filter label { font-size:14px; color:var(--muted); }
@@ -66,7 +83,6 @@ summary:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid v
 .activity-section { margin-block:28px; }
 .activity-list { gap:8px; }
 .activity-more,.event-archive { margin-top:12px; border-top:1px solid var(--line); }
-.reading-goal-section { margin-block:28px; }
 .pin-board { align-items:start; }
 .pin-note { min-height:0; }
 .book-dialog-card { max-width:860px; }
@@ -221,7 +237,7 @@ body:has(#memoryPhotoDialog[open]) { overflow:hidden; }
 .memory-photo-navigation span { color: var(--muted); }
 .saved-book-indicator { display: block; padding: 6px 10px; font-size: 12px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; }
 .saved-book-indicator[hidden] { display: none; }
-.shelf-book-copy .saved-book-indicator { position:static; display:block; width:auto; margin-top:4px; padding:0; border:0; border-radius:0; background:transparent; color:inherit; font-size:11px; font-weight:400; line-height:1.35; }
+.shelf-book-copy .saved-book-indicator { position:static; display:block; width:auto; margin-top:6px; padding:0; border:0; border-radius:0; background:transparent; color:var(--muted); font-size:12px; font-weight:400; line-height:1.35; }
 .shelf-book-copy .saved-book-indicator[hidden] { display:none; }
 .book-comment[data-notification-target] { outline: 2px solid var(--accent-text); outline-offset: 4px; scroll-margin-block: 24px; }
 

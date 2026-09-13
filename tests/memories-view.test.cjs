@@ -5,16 +5,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
-const functions = source.slice(source.indexOf('function updateMemoryView('), source.indexOf('function resetMemoryEditor('));
+const functions = source.slice(source.indexOf('function routeForHash('), source.indexOf('function resetMemoryEditor('));
 function setup(hash = '') {
   const nodes = {};
-  for (const id of ['homeContent','memories','memoriesHeading','top','events','memoryPhotoTitle','memoryPhotoContent','memoryPhotoDialog','memoryPhotoNavigation']) nodes[id] = { hidden: id === 'memories', focused: false, scrolled: false, focus() { this.focused = true; }, scrollIntoView() { this.scrolled = true; } };
+  for (const id of ['homeContent','libraryPage','readersPage','communityPage','archivePage','memories','memoriesHeading','top','events','memoryPhotoTitle','memoryPhotoContent','memoryPhotoDialog','memoryPhotoNavigation']) nodes[id] = { hidden: id === 'memories', focused: false, scrolled: false, matches() { return true; }, setAttribute() {}, focus() { this.focused = true; }, scrollIntoView() { this.scrolled = true; } };
   const navParts = { previous: {focus(){this.focused=true;}}, next: {focus(){this.focused=true;}}, status:{} };
   nodes.memoryPhotoNavigation.querySelector = selector => selector === '[role="status"]' ? navParts.status : selector.includes('-1') ? navParts.previous : navParts.next;
-  const links = ['#top','#memories','#events'].map(href => ({ href, getAttribute() { return href; }, setAttribute(_, value) { this.current = value; }, removeAttribute() { delete this.current; } }));
+  const links = ['#shelf','#community','#library'].map(href => ({ href, getAttribute() { return href; }, setAttribute(_, value) { this.current = value; }, removeAttribute() { delete this.current; } }));
   let shown = 0; let notices = [];
-  const context = vm.createContext({ $, location: { hash }, document: { querySelectorAll: () => links }, window: { scrollTo() {} },
-    requestAnimationFrame: fn => fn(), updateShelfNavigation() {},
+  const context = vm.createContext({ $, location: { hash }, document: { querySelectorAll: () => links, querySelector: () => null }, window: { scrollTo() {} },
+    requestAnimationFrame: fn => fn(), updateShelfNavigation() {}, loadClubArchive() {},
     state: { memories: [] }, ui: { memories: { classList: { toggle() {} } } },
     safeImageUrl: value => String(value || '').startsWith('https://') ? value : '',
     optimizedImageUrl: value => value, escapeHtml: value => String(value || '').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;'),
@@ -25,13 +25,13 @@ function setup(hash = '') {
   vm.runInContext(functions, context);
   return { context, nodes, links, navParts, shown: () => shown, notices };
 }
-test('direct Memories route hides the homepage and selects its navigation link', () => {
+test('direct Memories route hides the homepage and selects Community', () => {
   const h = setup('#memories'); h.context.updateMemoryView(false);
   assert.equal(h.nodes.homeContent.hidden, true); assert.equal(h.nodes.memories.hidden, false); assert.equal(h.links[1].current, 'page');
 });
 test('route transitions restore Events and support returning to Memories', () => {
   const h = setup('#memories'); h.context.updateMemoryView(); h.context.location.hash = '#events'; h.context.updateMemoryView();
-  assert.equal(h.nodes.homeContent.hidden, false); assert.equal(h.nodes.memories.hidden, true); assert.equal(h.nodes.events.scrolled, true);
+  assert.equal(h.nodes.homeContent.hidden, true); assert.equal(h.nodes.communityPage.hidden, false); assert.equal(h.nodes.memories.hidden, true); assert.equal(h.nodes.events.scrolled, true);
   h.context.location.hash = '#memories'; h.context.updateMemoryView(); assert.equal(h.nodes.memoriesHeading.focused, true);
 });
 test('malformed return hash safely falls back to the homepage', () => {
@@ -51,9 +51,9 @@ test('gallery photos are keyboard buttons and empty gallery has feedback', () =>
   h.context.state.memories = [{ id: 'p', title: 'A club day', imageUrl: 'https://example.test/p.jpg' }]; h.context.renderMemories();
   assert.match(h.context.ui.memories.innerHTML, /<button type="button" class="memory-photo"/); assert.match(h.context.ui.memories.innerHTML, /data-memory-focus="p"/);
 });
-test('gallery is outside homepage wrapper with desktop and mobile entry points', () => {
+test('gallery remains reachable through secondary Community and footer links', () => {
   assert.equal((html.match(/href="#memories"/g) || []).length, 2);
-  assert.match(html, /<section id="memories"[^>]+ hidden>/);
+  assert.match(html, /<section id="memories"[^>]+ hidden(?:="")?>/);
   assert.equal((html.match(/id="memoryForm"/g) || []).length, 1);
   assert.equal((html.match(/id="memoriesGrid"/g) || []).length, 1);
   assert.match(html, /<dialog id="memoryPhotoDialog"[^>]+aria-labelledby="memoryPhotoTitle"/);
@@ -72,3 +72,4 @@ test('photo controls stay mounted and focus moves away from a disabled boundary'
  h.context.openMemoryPhoto('a');const next=h.navParts.next;h.context.document.activeElement=next;h.context.moveMemoryPhoto(1);
  assert.equal(h.navParts.next,next);assert.equal(next.disabled,true);assert.equal(h.navParts.previous.focused,true);
 });
+
