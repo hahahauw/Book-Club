@@ -5,10 +5,11 @@ The website has no build dependencies. These test-only tools can be installed ou
 ```sh
 test_tools="$(mktemp -d)"
 npm install --prefix "$test_tools" --no-audit --no-fund acorn@8.18.0 jsdom@30.0.1 @firebase/rules-unit-testing@5.0.2 firebase@12.19.0 firebase-tools@14.22.0
-NODE_PATH="$test_tools/node_modules" node --test tests/frontend.test.cjs tests/ui.test.cjs tests/audit-repairs.test.cjs tests/batch-one.test.cjs tests/batch-two.test.cjs tests/club-shelf.test.cjs tests/events-memories-tools.test.cjs tests/library-tools.test.cjs tests/memories-view.test.cjs tests/navigation-catalog-tools.test.cjs tests/qol-audit.test.cjs tests/visual-regressions.test.cjs tests/catalogue-baseline.test.cjs
+NODE_PATH="$test_tools/node_modules" node --test tests/frontend.test.cjs tests/ui.test.cjs tests/audit-repairs.test.cjs tests/batch-one.test.cjs tests/batch-two.test.cjs tests/batch-three.test.cjs tests/club-shelf.test.cjs tests/events-memories-tools.test.cjs tests/library-tools.test.cjs tests/memories-view.test.cjs tests/navigation-catalog-tools.test.cjs tests/qol-audit.test.cjs tests/visual-regressions.test.cjs tests/catalogue-baseline.test.cjs
 NODE_PATH="$test_tools/node_modules" "$test_tools/node_modules/.bin/firebase" emulators:exec --only firestore --project demo-bec-security --config firebase.test.json 'node --test tests/firestore.test.cjs'
 node --check app.js
 node --check book-catalog.js
+node --check book-identity.js
 git diff --check
 ```
 
@@ -31,3 +32,9 @@ JSDOM and the source checks in `visual-regressions.test.cjs` do not establish re
 `batch-two.test.cjs` initializes the current application with isolated database boundaries. It checks primary and legacy hashes, matching navigation, visible heading focus, guest/member/officer transitions, preserved filters, archive caching/concurrent reads/partial failure, read-only archive controls, dated finish summaries and cover/caption structure. The active goal scan and pinboard-write tests were retired along with that code; archive tests cover the preserved content.
 
 For rendered release checks, visit Books → My library → Readers → Community → Memories → archive and use Back/Forward. Repeat in both themes and at the widths above. Verify library sign-in continuation, catalogue/manual entry and nested dialog focus. Confirm that `#board` and `#readingGoal` open the archive without starting any whole-library scan. Do not interpret CSS parsing or JSDOM focus assertions as successful visual validation.
+
+## Batch 3 shared book checks
+
+`batch-three.test.cjs` covers conservative identity resolution, duplicate/concurrent recommendations, per-reader attribution, preserved legacy fields and IDs, rating drafts, stale subscription callbacks, account changes, personal/public context selection and the read-only export report. The old monthly editor tests in `batch-one.test.cjs` were replaced with tests of the shared rating form. `club-shelf.test.cjs` now extracts functions with Acorn so unrelated function order cannot change its harness.
+
+The emulator also executes the production shared-publication helper during concurrent saves, verifies a second reader can recommend without editing the book, permits ratings on non-monthly existing books, and denies foreign/guest/orphan writes. See `SHARED_BOOKS.md` for rollout order and remaining rendered checks. Tests use the checked-in rules, not the deployed production rules.

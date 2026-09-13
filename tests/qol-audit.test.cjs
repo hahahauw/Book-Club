@@ -36,7 +36,7 @@ test('quota failure preserves new choice while successful storage reads see othe
 test('switching catalogue results immediately makes the old book unsaveable and ignores late details', async () => {
   const pending = [deferred(), deferred()];
   const state = { catalogResults: [{ title: 'A', author: 'Author' }, { title: 'B', author: 'Author' }], catalogBook: { title: 'Old' } };
-  const ui = { catalogPreview: { hidden: false }, catalogMessage: {}, catalogGenre: {}, catalogPreviewBook: {} };
+  const ui = { catalogPreview: { hidden: false, querySelector: () => null }, catalogMessage: {}, catalogGenre: {}, catalogPreviewBook: {} };
   const c = vm.createContext({ state, ui, revealCatalogPreview: () => { ui.catalogPreview.hidden = false; }, loadCatalogDetails: book => pending[book.title === 'A' ? 0 : 1].promise, catalogCover: () => '', escapeHtml: String, pageCountValue: () => 0, isMember: () => true });
   load(c, ['selectCatalogBook']);
   const first = c.selectCatalogBook(0);

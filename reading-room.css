@@ -244,3 +244,24 @@ body:has(#memoryPhotoDialog[open]) { overflow:hidden; }
 .pin-avatar { width:36px; height:36px; min-width:36px; min-height:36px; overflow:hidden; }
 .pin-avatar img { display:block; width:36px; height:36px; object-fit:cover; border-radius:50%; }
 
+
+/* Shared book context: stack secondary sections and keep reader controls within reach. */
+.book-rating, .book-recommendations, .conversation-choices, .shared-book-invitation { padding-block:18px; border-top:1px solid var(--line); min-width:0; }
+.book-recommendations summary, .conversation-choices summary, .historical-notes summary { cursor:pointer; padding-block:12px; font-weight:600; }
+.book-rating h3, .shared-book-invitation h3 { margin-top:0; }
+.book-rating-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+.book-rating-form label { flex:1 1 200px; }
+.book-rating-form .form-message { flex-basis:100%; }
+.book-rating-form label, #bookRecommendationForm label, .conversation-choice { display:grid; gap:8px; min-width:0; }
+.book-rating-form select, .conversation-choice select { width:100%; min-width:0; }
+#bookRecommendationForm { display:grid; gap:12px; margin-top:16px; }
+#bookRecommendationForm textarea { width:100%; min-height:100px; }
+#bookRecommendationForm .button { justify-self:start; }
+.conversation-choice { margin-block:16px; }
+.conversation-choice small { color:var(--muted); }
+.conversation-choices .text-button { display:block; width:100%; text-align:left; white-space:normal; overflow-wrap:anywhere; min-height:44px; padding-block:10px; }
+.reader-recommendation, .historical-notes .month-note { margin-block:12px; overflow-wrap:anywhere; }
+.reader-recommendation p { white-space:pre-wrap; }
+.historical-notes { margin-top:14px; }
+#manageMyCopy { margin-block:12px; }
+@media (max-width:580px) { .book-rating-form { display:grid; grid-template-columns:minmax(0,1fr); } .book-rating-form .button { justify-self:start; } }

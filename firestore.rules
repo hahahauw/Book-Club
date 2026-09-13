@@ -318,6 +318,7 @@ service cloud.firestore {
     match /books/{bookId}/recommendations/{uid} {
       allow read: if true;
       allow create, update: if own(uid) && isMember()
+        && existsAfter(/databases/$(database)/documents/books/$(bookId))
         && request.resource.data.keys().hasOnly(['memberId', 'displayName', 'reason', 'createdAt', 'updatedAt'])
         && request.resource.data.memberId == request.auth.uid
         && request.resource.data.displayName is string && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 60
@@ -328,7 +329,7 @@ service cloud.firestore {
     match /bookOfMonthRatings/{bookId}/members/{uid} {
       allow read: if true;
       allow create, update: if own(uid) && isMember()
-        && get(/databases/$(database)/documents/siteSettings/currentPick).data.bookId == bookId
+        && exists(/databases/$(database)/documents/books/$(bookId))
         && request.resource.data.keys().hasOnly(['memberId', 'displayName', 'stars', 'finished', 'comment', 'updatedAt'])
         && request.resource.data.memberId == request.auth.uid
         && request.resource.data.displayName is string && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 60
@@ -450,3 +451,4 @@ service cloud.firestore {
     match /{document=**} { allow read, write: if false; }
   }
 }
+
