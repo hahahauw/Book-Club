@@ -3,9 +3,42 @@ const GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes";
 const REQUEST_TIMEOUT = 9000;
 
 function text(value) {
-  if (Array.isArray(value)) return value.filter(Boolean).join(", ");
-  if (value && typeof value === "object") return value.value || "";
+  if (Array.isArray(value)) return value.map(text).filter(Boolean).join(", ");
+  if (value && typeof value === "object") return text(value.value);
   return String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// The common subset accepted by public books, pending books and personal entries.
+// Keep provider results intact for comparison and disclose shortening before saving.
+export function normalizeCatalogMetadata(book) {
+  const limits = { title: 160, author: 100, genre: 80, synopsis: 3000, source: 100, publicationYear: 20 };
+  const metadata = {};
+  for (const [field, maximum] of Object.entries(limits)) {
+    const value = text(book[field]) || (field === "title" ? "Untitled book" : field === "author" ? "Unknown author" : "");
+    metadata[field] = value.length > maximum ? value.slice(0, maximum - 1).replace(/[\uD800-\uDBFF]$/, "").trimEnd() + "…" : value;
+  }
+  for (const field of ["catalogKey", "catalogId", "openLibraryKey", "googleBooksId", "isbn"]) {
+    const value = String(book[field] || "");
+    if (value.length > (field === "isbn" ? 20 : 200)) throw new Error("This catalogue record has an unsupported identifier. Choose another result or enter the book manually.");
+    metadata[field] = value;
+  }
+  const cover = secureUrl(book.coverUrl);
+  try {
+    const url = new URL(cover);
+    metadata.coverUrl = cover.length <= 500 && url.protocol === "https:" && !url.username && !url.password ? cover : "";
+  } catch { metadata.coverUrl = ""; }
+  const pages = pageCount(book.pageCount);
+  if (pages) metadata.pageCount = pages;
+  return metadata;
+}
+
+export function catalogMetadataNotice(book) {
+  const normalized = normalizeCatalogMetadata(book);
+  const shortened = ["title", "author", "genre", "synopsis", "source", "publicationYear"].filter((field) => text(book[field]).length > normalized[field].length);
+  const notices = [];
+  if (shortened.length) notices.push(`The ${shortened.join(", ")} will be shortened when saved.`);
+  if (book.coverUrl && !normalized.coverUrl) notices.push("This cover link cannot be saved; you can add a different cover later.");
+  return notices.join(" ");
 }
 
 function cleanKey(value) {

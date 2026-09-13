@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { searchCatalog, loadCatalogDetails, sameBook } from "./book-catalog.js?v=5";
+import { searchCatalog, loadCatalogDetails, sameBook, normalizeCatalogMetadata, catalogMetadataNotice } from "./book-catalog.js?v=6";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA-G9WsH-sMdTzXvylNSJ1b-l5XkjBEol4",
@@ -28,6 +28,14 @@ const ui = {
   uploadSettingsForm: $("uploadSettingsForm"), cloudName: $("cloudName"), uploadPreset: $("uploadPreset"), googleBooksKey: $("googleBooksKey"), uploadSettingsStatus: $("uploadSettingsStatus"), suggestionHint: $("suggestionHint"),
   members: $("membersGrid"), suggestionDialog: $("suggestionDialog"), suggestionForm: $("suggestionForm"), suggestionMessage: $("suggestionMessage"), catalogDialog: $("catalogDialog"), catalogSearchForm: $("catalogSearchForm"), catalogQuery: $("catalogQuery"), catalogResults: $("catalogResults"), catalogPreview: $("catalogPreview"), catalogPreviewBook: $("catalogPreviewBook"), catalogDestinationGroup: $("catalogDestinationGroup"), catalogDestination: $("catalogDestination"), catalogGuestNameGroup: $("catalogGuestNameGroup"), catalogGuestName: $("catalogGuestName"), catalogGenre: $("catalogGenre"), catalogShelfNoteGroup: $("catalogShelfNoteGroup"), catalogShelfNote: $("catalogShelfNote"), catalogReasonGroup: $("catalogReasonGroup"), catalogReason: $("catalogReason"), catalogSave: $("catalogSaveButton"), catalogManual: $("catalogManualButton"), catalogMessage: $("catalogMessage"), bookDialog: $("bookDialog"), bookContent: $("bookContent"), profileDialog: $("profileDialog"), profileContent: $("profileContent")
 };
+
+function updateHeaderOffset() {
+  const header = document.querySelector(".site-header");
+  if (header) document.documentElement.style.setProperty("--header-offset", `${Math.ceil(header.getBoundingClientRect().height) + 16}px`);
+}
+updateHeaderOffset();
+if (typeof ResizeObserver !== "undefined") new ResizeObserver(updateHeaderOffset).observe(document.querySelector(".site-header"));
+window.addEventListener("resize", updateHeaderOffset);
 
 const preferenceFallback = new Map();
 function readPreference(storageName, key) {
@@ -217,7 +225,7 @@ function renderDashboard() {
   renderDashboardBookRow(ui.dashboardReading, reading, "Nothing is marked Currently Reading yet.");
   renderDashboardBookRow(ui.dashboardWanted, wanted, "Your Want to Read section is waiting for a future favorite.");
   renderDashboardBookRow(ui.dashboardFinished, finished, "Finished books will collect here once you move them into Read.");
-  ui.dashboardStatus.textContent = pageBooks && pageBooks < finished.length ? `Page totals use verified catalogue data from ${pageBooks} of ${finished.length} finished books; missing page counts are not estimated.` : finished.length && !pageBooks ? "Page totals will appear when finished books include reliable catalogue page counts. Nothing is estimated." : "Completion dates are tracked from Phase 3 onward; older Read books remain in the all-time total without being assigned a false finish date.";
+  ui.dashboardStatus.textContent = pageBooks && pageBooks < finished.length ? `Page totals use the saved page counts from ${pageBooks} of ${finished.length} finished books. Counts may vary by edition and can be edited.` : finished.length && !pageBooks ? "Page totals will appear when finished books have a saved page count." : "Books without a finish date count toward your all-time total, but not a particular month or year. Page totals use saved counts and may vary by edition.";
 }
 function syncDashboardSubscriptions() {
   if (!isMember()) {
@@ -471,7 +479,7 @@ async function saveReadingGoal(event) {
     try {
       await setDoc(doc(db, "siteSettings", "readingGoal"), { title, target, metric: "books", startAt: serverTimestamp(), endDate, active: true, finalProgress: 0, updatedAt: serverTimestamp() });
       ui.readingGoalForm.reset(); ui.readingGoalTarget.value = "50"; ui.readingGoalStatus.textContent = "The new challenge is live for everyone."; toast("Collective reading goal started.");
-    } catch (error) { console.error(error); ui.readingGoalStatus.textContent = "Could not start that goal. Check the Phase 3 Firestore rules."; }
+    } catch (error) { console.error(error); ui.readingGoalStatus.textContent = "Could not start that goal. Check your connection and try again."; }
   });
 }
 async function finishReadingGoal() {
@@ -495,7 +503,7 @@ function setAuthUi() {
   const name = state.profile?.displayName || state.user?.displayName || "reader";
   ui.authStatus.textContent = isMember() ? `Hello, ${name}` : state.user ? "Signed in — member access pending" : "Exploring as a guest";
   ui.signIn.hidden = Boolean(state.user); ui.signOut.hidden = !state.user; ui.profile.hidden = !isMember(); ui.monthOfficer.hidden = !isOfficer(); ui.readingGoalForm.hidden = !isOfficer(); ui.eventForm.hidden = !isOfficer(); ui.memoryForm.hidden = !isOfficer(); ui.inviteForm.hidden = !isOfficer(); ui.uploadSettingsForm.hidden = !isOfficer(); ui.announcementForm.hidden = !isOfficer(); ui.openPending.hidden = !isOfficer(); ui.boardForm.hidden = !isMember(); ui.boardGuestHint.hidden = isMember(); ui.monthForm.hidden = !isMember(); ui.monthMessage.hidden = !isMember();
-  ui.suggestionHint.textContent = isMember() ? "Search two catalogues, then add the result to the club shelf or your personal library." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review.";
+  ui.suggestionHint.textContent = isMember() ? "Search for a book, then save it to My library or recommend it to the club." : "Everyone can search the catalogue. Guest suggestions are sent to officers for review.";
   if (isOfficer()) { ensureMonthAccentControl(); ui.cloudName.value = state.cloudName; ui.uploadPreset.value = state.uploadPreset; ui.googleBooksKey.value = state.googleBooksKey; ui.announcementInput.value = state.announcement; }
   syncPendingSubscription(); renderNotifications(); syncNotificationSubscription(); syncEventRsvpSubscription(); syncDashboardSubscriptions(); renderDashboard(); renderDiscovery(); renderMonth(); renderReadingGoal(); renderEvents(); renderMemoryOptions(); renderMemories(); renderBoard(); renderPending(); renderBookReactions();
 }
@@ -558,7 +566,9 @@ function renderPending() {
   ui.pendingCount.textContent = String(state.pendingBooks.length);
   ui.pendingList.innerHTML = state.pendingBooks.length ? recentFirst(state.pendingBooks).map((book) => {
     const duplicate = state.books.some((item) => sameBook(item, book));
-    return `<article class="pending-item"><div><p class="eyebrow">${duplicate ? "ALREADY ON THE CLUB SHELF" : "NEW GUEST SUGGESTION"}</p><h3>${escapeHtml(book.title || "Untitled book")}</h3><p>by ${escapeHtml(book.author || "Unknown author")}${book.genre ? ` · ${escapeHtml(book.genre)}` : ""}</p>${book.why ? `<blockquote>${escapeHtml(book.why)}</blockquote>` : ""}<small>Suggested by ${escapeHtml(book.name || "a guest reader")}</small></div><div class="pending-actions"><button type="button" class="button" data-approve-pending="${escapeHtml(book.id)}">${duplicate ? "Add note to existing book" : "Approve"}</button><button type="button" class="text-button" data-reject-pending="${escapeHtml(book.id)}">Reject</button></div></article>`;
+    let metadataNotice = "";
+    if (!duplicate) { try { metadataNotice = catalogMetadataNotice(book); } catch (error) { metadataNotice = error.message; } }
+    return `<article class="pending-item"><div><p class="eyebrow">${duplicate ? "ALREADY ON THE CLUB SHELF" : "NEW GUEST SUGGESTION"}</p><h3>${escapeHtml(book.title || "Untitled book")}</h3><p>by ${escapeHtml(book.author || "Unknown author")}${book.genre ? ` · ${escapeHtml(book.genre)}` : ""}</p>${book.why ? `<blockquote>${escapeHtml(book.why)}</blockquote>` : ""}<small>Suggested by ${escapeHtml(book.name || "a guest reader")}</small>${metadataNotice ? `<p class="form-message">${escapeHtml(metadataNotice)}</p>` : ""}</div><div class="pending-actions"><button type="button" class="button" data-approve-pending="${escapeHtml(book.id)}">${duplicate ? "Add note to existing book" : "Approve"}</button><button type="button" class="text-button" data-reject-pending="${escapeHtml(book.id)}">Reject</button></div></article>`;
   }).join("") : '<p class="empty-state">The guest suggestion queue is clear.</p>';
 }
 function syncPendingSubscription() {
@@ -579,13 +589,14 @@ async function reviewPending(id, approve) {
         if (String(pending.why || "").trim()) await updateDoc(doc(db, "books", existing.id), { comments: arrayUnion({ name: pending.name || "Guest reader", text: String(pending.why).trim().slice(0, 500), date: new Date().toISOString() }) });
         toast(existing && pending.why ? "Added the guest’s note to the existing book discussion." : "That book was already on the shelf, so no duplicate was created.");
       } else {
-        await addDoc(collection(db, "books"), withPageCount({ name: pending.name || "Guest reader", memberName: pending.name || "Guest reader", title: pending.title || "Untitled book", author: pending.author || "Unknown author", genre: pending.genre || "", coverUrl: pending.coverUrl || "", why: pending.why || "", synopsis: pending.synopsis || "", catalogKey: pending.catalogKey || "", catalogId: pending.catalogId || "", openLibraryKey: pending.openLibraryKey || "", googleBooksId: pending.googleBooksId || "", isbn: pending.isbn || "", publicationYear: String(pending.publicationYear || ""), source: pending.source || "", date: pending.date || new Date().toISOString(), comments: [] }, pending.pageCount));
+        const metadata = normalizeCatalogMetadata(pending);
+        await addDoc(collection(db, "books"), { ...metadata, name: pending.name || "Guest reader", memberName: pending.name || "Guest reader", why: pending.why || "", date: pending.date || new Date().toISOString(), comments: [] });
         toast("Guest suggestion approved and added to the shelf.");
       }
     }
     await deleteDoc(doc(db, "pendingBooks", id));
     if (!approve) toast("Guest suggestion rejected.");
-  } catch (error) { console.error(error); toast("Could not update that guest suggestion."); }
+  } catch (error) { console.error(error); toast(error.message || "Could not update that guest suggestion."); }
 }
 
 function currentBook() { return state.books.find((book) => book.id === state.currentPickId); }
@@ -702,7 +713,7 @@ function catalogCover(book, className) { return automaticCoverUrl(book) ? coverI
 function openCatalog(target = "recommendation") {
   if (state.catalogSaving) { toast("Your book is still saving. Please wait before opening the catalogue again."); return; }
   state.catalogSearchToken = {}; state.catalogSelectionToken = {}; state.catalogTarget = target; state.catalogResults = []; state.catalogBook = null; state.catalogDuplicateConfirmation = "";
-  ui.catalogResults.innerHTML = ""; ui.catalogPreview.hidden = true; ui.catalogMessage.textContent = ""; ui.catalogSearchForm.reset(); ui.catalogSearchForm.querySelector("button").disabled = false; ui.catalogGuestName.value = ""; ui.catalogGenre.value = ""; ui.catalogShelfNote.value = ""; ui.catalogReason.value = "";
+  ui.catalogResults.innerHTML = ""; ui.catalogResults.hidden = false; ui.catalogPreview.hidden = true; ui.catalogMessage.textContent = ""; ui.catalogSearchForm.reset(); ui.catalogSearchForm.querySelector("button").disabled = false; ui.catalogGuestName.value = ""; ui.catalogGenre.value = ""; ui.catalogShelfNote.value = ""; ui.catalogReason.value = "";
   ui.catalogDestination.value = isMember() && target === "shelf" ? "reading" : "recommendation"; updateCatalogDestination(); showDialog(ui.catalogDialog, ui.catalogQuery);
 }
 function updateCatalogDestination() {
@@ -733,35 +744,58 @@ function refreshSavedBookIndicators() {
   if (status && book) { status.textContent = savedBookLabel(book); status.hidden = !status.textContent; }
 }
 function renderCatalogResults() {
+  ui.catalogResults.hidden = false;
   ui.catalogResults.innerHTML = state.catalogResults.length ? state.catalogResults.map((book, index) => `<button type="button" class="catalog-result" data-catalog-result="${index}">${catalogCover(book, "catalog-result-cover")}<span><strong>${escapeHtml(book.title)}</strong><small>by ${escapeHtml(book.author)}</small><small>${book.publicationYear ? `First published ${escapeHtml(book.publicationYear)}` : "Publication date unavailable"}${book.isbn ? ` · ISBN ${escapeHtml(book.isbn)}` : ""}</small><span class="catalog-source">${escapeHtml(book.source || "Book catalogue")}</span>${savedBookBadge(book)}</span></button>`).join("") : '<p class="empty-state">No matches yet. Try a title, author, or ISBN—or enter it manually.</p>';
 }
 async function submitCatalogSearch(event) {
   event.preventDefault(); if (state.catalogSaving) return; const term = ui.catalogQuery.value.trim(); if (term.length < 2) { ui.catalogMessage.textContent = "Enter at least two characters to search."; return; }
   const token = {}; state.catalogSearchToken = token; state.catalogSelectionToken = {};
   const button = ui.catalogSearchForm.querySelector("button"); button.disabled = true; ui.catalogMessage.textContent = state.googleBooksKey ? "Searching Open Library and Google Books…" : "Searching Open Library…"; ui.catalogPreview.hidden = true; state.catalogBook = null; state.catalogResults = []; ui.catalogResults.replaceChildren();
-  try { const results = await searchCatalog(term, { googleBooksApiKey: state.googleBooksKey }); if (state.catalogSearchToken !== token) return; state.catalogResults = results; renderCatalogResults(); ui.catalogMessage.textContent = state.catalogResults.length ? `${state.catalogResults.length} results. Choose the edition that looks right.` : "No match found. You can enter this book manually."; }
+  try { const results = await searchCatalog(term, { googleBooksApiKey: state.googleBooksKey }); if (state.catalogSearchToken !== token) return; state.catalogResults = results; renderCatalogResults(); ui.catalogMessage.textContent = state.catalogResults.length ? `${state.catalogResults.length} results. Choose a result to view its details.` : "No match found. You can enter this book manually."; }
   catch (error) { if (state.catalogSearchToken !== token) return; console.error(error); state.catalogResults = []; renderCatalogResults(); ui.catalogMessage.textContent = error.message || "The catalogue is unavailable right now. Manual entry still works."; }
   finally { if (state.catalogSearchToken === token) button.disabled = false; }
 }
 async function selectCatalogBook(index) {
   if (state.catalogSaving) return;
   const result = state.catalogResults[index]; if (!result) return;
-  state.catalogBook = null; ui.catalogPreview.hidden = true;
+  state.catalogBook = null; state.catalogSelectedIndex = index; ui.catalogPreview.hidden = true;
   const selection = {}; state.catalogSelectionToken = selection;
   ui.catalogMessage.textContent = "Loading book details…";
   try {
     const book = await loadCatalogDetails(result); if (state.catalogSelectionToken !== selection) return; state.catalogBook = book; state.catalogDuplicateConfirmation = ""; ui.catalogGenre.value = String(book.genre || "").slice(0, 80);
-    ui.catalogPreviewBook.innerHTML = `<div class="catalog-preview-book">${catalogCover(book, "catalog-preview-cover")}<div><p class="eyebrow">${escapeHtml(book.source || "BOOK CATALOGUE")}</p><h3>${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p><p class="catalog-meta">${book.publicationYear ? `First published ${escapeHtml(book.publicationYear)}` : "Publication date unavailable"}${book.isbn ? ` · ISBN ${escapeHtml(book.isbn)}` : ""}${pageCountValue(book.pageCount) ? ` · ${pageCountValue(book.pageCount).toLocaleString()} pages` : ""}</p>${book.synopsis ? `<p>${escapeHtml(book.synopsis)}</p>` : '<p class="catalog-meta">No synopsis is available for this edition.</p>'}</div></div>`;
-    ui.catalogPreview.hidden = false; ui.catalogMessage.textContent = isMember() ? "Check the details, then choose where to save it." : "Check the details, then send it to the officers for review.";
+    ui.catalogPreviewBook.innerHTML = `<div class="catalog-preview-book">${catalogCover(book, "catalog-preview-cover")}<div><p class="eyebrow">${escapeHtml(book.source || "BOOK CATALOGUE")}</p><h3 id="catalogSelectedTitle" tabindex="-1">${escapeHtml(book.title)}</h3><p>by ${escapeHtml(book.author)}</p><p class="catalog-meta">${book.publicationYear ? `First published ${escapeHtml(book.publicationYear)}` : "Publication date unavailable"}${book.isbn ? ` · ISBN ${escapeHtml(book.isbn)}` : ""}${pageCountValue(book.pageCount) ? ` · ${pageCountValue(book.pageCount).toLocaleString()} pages` : ""}</p>${book.synopsis ? `<p>${escapeHtml(book.synopsis)}</p>` : '<p class="catalog-meta">No synopsis is available for this result.</p>'}</div></div>`;
+    revealCatalogPreview(); ui.catalogMessage.textContent = isMember() ? "Check the details, then choose where to save it." : "Browse the details below. Sending a suggestion is optional and requires officer review.";
   } catch (error) {
     console.error(error);
     if (state.catalogSelectionToken !== selection) return;
     state.catalogBook = result;
     ui.catalogGenre.value = String(result.genre || "").slice(0, 80);
-    ui.catalogPreviewBook.innerHTML = `<div class="catalog-preview-book">${catalogCover(result, "catalog-preview-cover")}<div><p class="eyebrow">${escapeHtml(result.source || "BOOK CATALOGUE")}</p><h3>${escapeHtml(result.title)}</h3><p>by ${escapeHtml(result.author)}</p><p class="catalog-meta">Extra details are temporarily unavailable.</p></div></div>`;
-    ui.catalogPreview.hidden = false;
+    ui.catalogPreviewBook.innerHTML = `<div class="catalog-preview-book">${catalogCover(result, "catalog-preview-cover")}<div><p class="eyebrow">${escapeHtml(result.source || "BOOK CATALOGUE")}</p><h3 id="catalogSelectedTitle" tabindex="-1">${escapeHtml(result.title)}</h3><p>by ${escapeHtml(result.author)}</p><p class="catalog-meta">Extra details are temporarily unavailable.</p></div></div>`;
+    revealCatalogPreview();
     ui.catalogMessage.textContent = "Extra details could not load, but you can still save this result or use manual entry.";
   }
+}
+function revealCatalogPreview() {
+  const notice = $("catalogMetadataNotice");
+  try { notice.textContent = catalogMetadataNotice(state.catalogBook); ui.catalogSave.disabled = false; }
+  catch (error) { notice.textContent = error.message; ui.catalogSave.disabled = true; }
+  notice.hidden = !notice.textContent;
+  ui.catalogResults.hidden = true;
+  ui.catalogPreview.hidden = false;
+  const heading = $("catalogSelectedTitle");
+  heading.focus({ preventScroll: true });
+  ui.catalogPreview.scrollIntoView({ block: "start", behavior: "instant" });
+}
+function returnToCatalogResults() {
+  if (state.catalogSaving) return;
+  state.catalogSelectionToken = {};
+  ui.catalogPreview.hidden = true;
+  ui.catalogResults.hidden = false;
+  const result = ui.catalogResults.querySelector(`[data-catalog-result="${state.catalogSelectedIndex}"]`);
+  const target = result || ui.catalogQuery;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: "center", behavior: "instant" });
+  ui.catalogMessage.textContent = `${state.catalogResults.length} results. Choose a result to view its details.`;
 }
 async function existingShelfEntry(book, uid = state.user?.uid) {
   if (!uid) throw new Error("Sign in before opening your library.");
@@ -803,6 +837,7 @@ async function moveShelfEntry(uid, id, status) {
   });
 }
 async function saveCatalogShelfBook(book, status) {
+  book = { ...book, ...normalizeCatalogMetadata({ ...book, genre: ui.catalogGenre.value.trim() }) };
   const uid = state.user?.uid; requireShelfOwner(uid);
   const existing = await existingShelfEntry(book, uid); requireShelfOwner(uid);
   const key = `${existing?.id || "new"}:${status}`;
@@ -813,7 +848,7 @@ async function saveCatalogShelfBook(book, status) {
     await recordActivity(activityTypeForStatus(status), entry, { shelfEntryId: existing.id, key: `${existing.id}_${status}` });
     ui.catalogMessage.textContent = "Moved your existing shelf entry. Personal details kept."; toast(ui.catalogMessage.textContent); return true;
   }
-  const metadata = withPageCount({ title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim(), date: new Date().toISOString() }, book.pageCount);
+  const metadata = withPageCount({ title: book.title, author: book.author, genre: book.genre, coverUrl: book.coverUrl || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), synopsis: book.synopsis || "", source: book.source || "", status, note: ui.catalogShelfNote.value.trim(), date: new Date().toISOString() }, book.pageCount);
   if (status === "read") metadata.completedAt = serverTimestamp();
   const result = await createShelfEntry(book, metadata, uid);
   if (!result.added) { ui.catalogMessage.textContent = "This book was already added to My library. Open it there to change its status."; return false; }
@@ -835,9 +870,10 @@ function connectionMessage(names, onOwnShelf) {
   return otherNames.length ? `${otherNames[0]}${otherNames.length > 1 ? ` and ${otherNames.length - 1} other member${otherNames.length === 2 ? "" : "s"}` : ""} also recommend${otherNames.length === 1 ? "s" : ""} this book.` : onOwnShelf ? "This book is already on your personal shelf too — now the club can discover it." : "Your recommendation is now part of the club shelf.";
 }
 async function saveCatalogRecommendation(book) {
+  book = { ...book, ...normalizeCatalogMetadata({ ...book, genre: ui.catalogGenre.value.trim() }) };
   const { publicMatches, names, onOwnShelf } = await findBookConnections(book);
   if (publicMatches.some((item) => item.memberId === state.user.uid)) { ui.catalogMessage.textContent = "You already recommended this book, so another copy was not added."; toast(ui.catalogMessage.textContent); return false; }
-  const recommendation = withPageCount({ title: book.title, author: book.author, genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [] }, book.pageCount);
+  const recommendation = withPageCount({ title: book.title, author: book.author, genre: book.genre, coverUrl: book.coverUrl || "", synopsis: book.synopsis || "", why: ui.catalogReason.value.trim(), memberId: state.user.uid, memberName: state.profile.displayName || "Club member", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [] }, book.pageCount);
   const added = await addDoc(collection(db, "books"), recommendation);
   await recordActivity("recommended_book", recommendation, { publicBookId: added.id, key: added.id });
   const reaction = connectionMessage(names, onOwnShelf);
@@ -845,11 +881,12 @@ async function saveCatalogRecommendation(book) {
   return true;
 }
 async function saveGuestCatalogSuggestion(book) {
+  book = { ...book, ...normalizeCatalogMetadata({ ...book, genre: ui.catalogGenre.value.trim() }) };
   const name = ui.catalogGuestName.value.trim();
   if (!name) { ui.catalogMessage.textContent = "Please add your name before sending this suggestion."; ui.catalogGuestName.focus(); return false; }
   const publicMatch = state.books.find((item) => sameBook(item, book));
   await addDoc(collection(db, "pendingBooks"), withPageCount({
-    name, title: book.title || "Untitled book", author: book.author || "Unknown author", genre: ui.catalogGenre.value.trim(), coverUrl: book.coverUrl || "", why: ui.catalogReason.value.trim(), synopsis: book.synopsis || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [], submittedAt: new Date().toISOString(), status: "pending"
+    name, title: book.title || "Untitled book", author: book.author || "Unknown author", genre: book.genre, coverUrl: book.coverUrl || "", why: ui.catalogReason.value.trim(), synopsis: book.synopsis || "", catalogKey: book.catalogKey || "", catalogId: book.catalogId || "", openLibraryKey: book.openLibraryKey || "", googleBooksId: book.googleBooksId || "", isbn: book.isbn || "", publicationYear: String(book.publicationYear || ""), source: book.source || "Book catalogue", date: new Date().toISOString(), comments: [], submittedAt: new Date().toISOString(), status: "pending"
   }, book.pageCount));
   const message = publicMatch ? `This book is already on the club shelf. Your note was sent to the officers for review.` : "Thanks — your suggestion was sent to the officers for review.";
   ui.catalogMessage.textContent = message; toast(message); return true;
@@ -1288,9 +1325,9 @@ async function openProfile(uid) {
     state.openProfileMember = { ...member, id: uid };
     ui.profileDialog.setAttribute("aria-label", `${member.displayName || "Club member"}’s member library`);
     const avatar = member.photoURL ? `<img src="${escapeHtml(optimizedImageUrl(member.photoURL, 360))}" alt="Portrait of ${escapeHtml(member.displayName || "club member")}" decoding="async" width="180" height="180">` : escapeHtml(initials(member.displayName));
-    const shelfForm = own && isMember() ? `<button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Add a book</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><button id="openCatalogFromShelf" type="button" class="text-button">Find a book automatically</button><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Page count <input id="shelfPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>A small note <textarea id="shelfNote" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
-    const customize = own && isMember() ? `<details class="profile-customize"><summary>Customize my library card</summary><form id="profileForm"><label>Display name <input id="profileNameInput" maxlength="60" value="${escapeHtml(member.displayName || "")}"></label><label>Short bio <textarea id="profileBioInput" maxlength="80">${escapeHtml(member.bio || "")}</textarea></label><label>Library colour <input id="profileColorInput" type="color" value="${accent}"></label><label>Public avatar URL <input id="profilePhotoInput" type="url" maxlength="500" value="${escapeHtml(member.photoURL || "")}" placeholder="Optional image link"></label><label>Or upload an avatar <input id="profilePhotoFile" type="file" accept="image/*"></label><label>Favourite genre <input id="profileGenreInput" maxlength="40" value="${escapeHtml(member.favoriteGenre || "")}" placeholder="e.g. Fantasy"></label><label>Currently reading <input id="profileCurrentInput" maxlength="100" value="${escapeHtml(member.currentlyReading || "")}" placeholder="A book you are into right now"></label><label class="checkbox-line"><input id="profileShowStats" type="checkbox" ${member.showReadingStats !== false ? "checked" : ""}> Show my reading summary to visitors</label><label class="checkbox-line"><input id="profileShareActivity" type="checkbox" ${member.shareActivity === true ? "checked" : ""}> Share meaningful reading activity</label><p class="activity-privacy-note">This shares book titles and actions such as started, finished, rated, or discussed. It never shares your email, notes, or comment text.</p>${isOfficer() ? `<label>Club role label <select id="profileTitleInput"><option value="Officer" ${member.clubTitle !== "President" ? "selected" : ""}>Officer</option><option value="President" ${member.clubTitle === "President" ? "selected" : ""}>President</option></select></label>` : ""}<button type="submit" class="text-button">Save library card</button></form></details>` : "";
-    ui.profileContent.innerHTML = `<div class="profile-layout" style="--accent:${accent}"><aside class="profile-side"><div class="profile-avatar">${avatar}</div><h2>${escapeHtml(member.displayName || "Club member")}</h2><p>${escapeHtml(member.bio || "A reader in the Book Enthusiasts Club.")}</p><p>Member since ${escapeHtml(dateLabel(String(member.joinedAt || "").slice(0, 10)))}</p><div class="profile-meta">${member.clubTitle ? `<span>${escapeHtml(member.clubTitle)}</span>` : ""}${member.favoriteGenre ? `<span>Usually reading ${escapeHtml(member.favoriteGenre)}</span>` : ""}${member.currentlyReading ? `<span>Currently: ${escapeHtml(member.currentlyReading)}</span>` : ""}</div>${customize}</aside><section class="profile-library"><p class="eyebrow">PERSONAL LIBRARY</p><h3>${own ? "My shelf" : `${escapeHtml(member.displayName || "Their")}’s shelf`}</h3><div id="libraryStats" class="library-stats"><span class="skeleton skeleton-pill" aria-hidden="true"></span><span class="skeleton skeleton-pill" aria-hidden="true"></span></div><div id="readingSnapshot" class="profile-reading-summary" aria-live="polite"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div><section class="profile-favorites"><div class="profile-section-heading"><h4>Top 3 favorites</h4><p>${own ? "Open a shelf book to pin or unpin it." : "A small peek at their all-time picks."}</p></div><div id="favoriteBooks" class="favorite-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><div class="library-controls"><label>Search this library<input id="librarySearch" type="search" placeholder="Title, author, or genre"></label><label>Reading status<select id="libraryFilter"><option value="">All books</option><option value="reading">Reading</option><option value="want-to-read">Want to read</option><option value="read">Read</option></select></label><label>Sort by<select id="librarySort"><option value="added">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option><option value="finished">Recently finished</option></select></label><button id="libraryClear" class="text-button" type="button">Clear filters</button></div><p id="libraryResults" class="form-message" role="status"></p><div id="personalBooks" class="personal-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div>${shelfForm}<section class="profile-activity"><h4>Recent reading activity</h4><div id="memberActivityList" aria-busy="true"><div class="skeleton skeleton-activity" aria-hidden="true"></div></div></section></section></div>`;
+    const shelfForm = own && isMember() ? `<button id="shelfFormToggle" type="button" class="text-button shelf-form-toggle" aria-expanded="false" aria-controls="shelfForm">Add a book</button><form id="shelfForm" class="add-shelf-form" hidden><h4>Add to my shelf</h4><p id="shelfVisibility" class="form-message">Your shelf, reading status, finish dates and notes are visible to everyone, including visitors who are signed out.</p><button id="openCatalogFromShelf" type="button" class="text-button">Find a book automatically</button><label>Book title <input id="shelfTitle" maxlength="160" required></label><label>Author <input id="shelfAuthor" maxlength="100" required></label><label>Genre <input id="shelfGenre" maxlength="80" placeholder="Optional"></label><label>Page count <input id="shelfPages" type="number" min="1" max="10000" inputmode="numeric" placeholder="Optional"></label><label>Cover image URL <input id="shelfCover" type="url" maxlength="500" placeholder="Optional"></label><label>Upload a cover <input id="shelfFile" type="file" accept="image/*"></label><label>Reading status <select id="shelfStatus"><option value="reading">Reading</option><option value="read">Read</option><option value="want-to-read">Want to read</option></select></label><label>Public shelf note (optional) <textarea id="shelfNote" aria-describedby="shelfVisibility" maxlength="280" placeholder="Optional"></textarea></label><button class="button" type="submit">Add book</button></form>` : "";
+    const customize = own && isMember() ? `<details class="profile-customize"><summary>Customize my library card</summary><form id="profileForm"><label>Display name <input id="profileNameInput" maxlength="60" value="${escapeHtml(member.displayName || "")}"></label><label>Short bio <textarea id="profileBioInput" maxlength="80">${escapeHtml(member.bio || "")}</textarea></label><label>Library colour <input id="profileColorInput" type="color" value="${accent}"></label><label>Public avatar URL <input id="profilePhotoInput" type="url" maxlength="500" value="${escapeHtml(member.photoURL || "")}" placeholder="Optional image link"></label><label>Or upload an avatar <input id="profilePhotoFile" type="file" accept="image/*"></label><label>Favourite genre <input id="profileGenreInput" maxlength="40" value="${escapeHtml(member.favoriteGenre || "")}" placeholder="e.g. Fantasy"></label><label>Currently reading <input id="profileCurrentInput" maxlength="100" value="${escapeHtml(member.currentlyReading || "")}" placeholder="A book you are into right now"></label><label class="checkbox-line"><input id="profileShowStats" type="checkbox" ${member.showReadingStats !== false ? "checked" : ""}> Show summary cards on my profile</label><p class="activity-privacy-note">Hiding summary cards does not make your shelf private. Books, reading status, finish dates and shelf notes remain public.</p><label class="checkbox-line"><input id="profileShareActivity" type="checkbox" ${member.shareActivity === true ? "checked" : ""}> Share meaningful reading activity</label><p class="activity-privacy-note">The activity feed shares book titles and reading actions, without copying email addresses, notes or comment text. Shelf notes and discussion comments remain public in their original locations.</p>${isOfficer() ? `<label>Club role label <select id="profileTitleInput"><option value="Officer" ${member.clubTitle !== "President" ? "selected" : ""}>Officer</option><option value="President" ${member.clubTitle === "President" ? "selected" : ""}>President</option></select></label>` : ""}<button type="submit" class="text-button">Save library card</button></form></details>` : "";
+    ui.profileContent.innerHTML = `<div class="profile-layout" style="--accent:${accent}"><aside class="profile-side"><div class="profile-avatar">${avatar}</div><h2>${escapeHtml(member.displayName || "Club member")}</h2><p>${escapeHtml(member.bio || "A reader in the Book Enthusiasts Club.")}</p><p>Member since ${escapeHtml(dateLabel(String(member.joinedAt || "").slice(0, 10)))}</p><div class="profile-meta">${member.clubTitle ? `<span>${escapeHtml(member.clubTitle)}</span>` : ""}${member.favoriteGenre ? `<span>Usually reading ${escapeHtml(member.favoriteGenre)}</span>` : ""}${member.currentlyReading ? `<span>Currently: ${escapeHtml(member.currentlyReading)}</span>` : ""}</div>${customize}</aside><section class="profile-library"><p class="eyebrow">PUBLIC READER LIBRARY</p><h3>${own ? "My shelf" : `${escapeHtml(member.displayName || "Their")}’s shelf`}</h3><div id="libraryStats" class="library-stats"><span class="skeleton skeleton-pill" aria-hidden="true"></span><span class="skeleton skeleton-pill" aria-hidden="true"></span></div><div id="readingSnapshot" class="profile-reading-summary" aria-live="polite"><span class="skeleton skeleton-stat" aria-hidden="true"></span><span class="skeleton skeleton-stat" aria-hidden="true"></span></div><section class="profile-favorites"><div class="profile-section-heading"><h4>Top 3 favorites</h4><p>${own ? "Open a shelf book to pin or unpin it." : "A small peek at their all-time picks."}</p></div><div id="favoriteBooks" class="favorite-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div></section><div class="library-controls"><label>Search this library<input id="librarySearch" type="search" placeholder="Title, author, or genre"></label><label>Reading status<select id="libraryFilter"><option value="">All books</option><option value="reading">Reading</option><option value="want-to-read">Want to read</option><option value="read">Read</option></select></label><label>Sort by<select id="librarySort"><option value="added">Recently added</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option><option value="finished">Recently finished</option></select></label><button id="libraryClear" class="text-button" type="button">Clear filters</button></div><p id="libraryResults" class="form-message" role="status"></p><div id="personalBooks" class="personal-books" aria-busy="true"><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span><span class="skeleton skeleton-cover" aria-hidden="true"></span></div>${shelfForm}<section class="profile-activity"><h4>Recent reading activity</h4><div id="memberActivityList" aria-busy="true"><div class="skeleton skeleton-activity" aria-hidden="true"></div></div></section></section></div>`;
     $("profileForm")?.addEventListener("submit", saveProfileCard);
     $("shelfForm")?.addEventListener("submit", addShelfBook);
     ["librarySearch", "libraryFilter", "librarySort"].forEach((id) => $(id).addEventListener(id === "librarySearch" ? "input" : "change", () => renderShelf(state.shelfEntries)));
@@ -1465,7 +1502,7 @@ function parseCompletionDate(value) {
   return date;
 }
 function personalBookEditor(book) {
-  return `<details class="personal-entry-editor"><summary>Edit this book</summary><form id="personalEntryForm" class="personal-entry-form"><label>Title<input name="title" maxlength="160" value="${escapeHtml(book.title || "")}" required></label><label>Author<input name="author" maxlength="100" value="${escapeHtml(book.author || "")}" required></label><label>Genre<input name="genre" maxlength="80" value="${escapeHtml(book.genre || "")}"></label><label>Page count<input name="pageCount" type="number" min="1" max="10000" step="1" value="${pageCountValue(book.pageCount) || ""}"></label><label>Cover URL<input name="coverUrl" type="url" maxlength="500" value="${escapeHtml(book.coverUrl || "")}"></label><label>Or upload a cover<input name="coverFile" type="file" accept="image/*"></label><label>Your note<textarea name="note" maxlength="280">${escapeHtml(book.note || "")}</textarea></label><label>About the book<textarea name="synopsis" maxlength="3000">${escapeHtml(book.synopsis || "")}</textarea></label><label data-completion-label ${book.status === "read" ? "" : "hidden"}>Date finished (optional)<input name="completedAt" data-initial-date="${completionDateInput(book.completedAt)}" type="date" max="${localDateKey()}" value="${completionDateInput(book.completedAt)}" ${book.status === "read" ? "" : "disabled"}><small>Leave blank if you don’t know the date.</small></label><button type="submit" class="button">Save changes</button><p class="form-message" role="status"></p></form></details>`;
+  return `<details class="personal-entry-editor"><summary>Edit this book</summary><form id="personalEntryForm" class="personal-entry-form"><label>Title<input name="title" maxlength="160" value="${escapeHtml(book.title || "")}" required></label><label>Author<input name="author" maxlength="100" value="${escapeHtml(book.author || "")}" required></label><label>Genre<input name="genre" maxlength="80" value="${escapeHtml(book.genre || "")}"></label><label>Page count<input name="pageCount" type="number" min="1" max="10000" step="1" value="${pageCountValue(book.pageCount) || ""}"></label><label>Cover URL<input name="coverUrl" type="url" maxlength="500" value="${escapeHtml(book.coverUrl || "")}"></label><label>Or upload a cover<input name="coverFile" type="file" accept="image/*"></label><label>Public shelf note<textarea name="note" aria-describedby="entryNoteVisibility" maxlength="280">${escapeHtml(book.note || "")}</textarea><small id="entryNoteVisibility">Visible to everyone who views your shelf, including signed-out visitors.</small></label><label>About the book<textarea name="synopsis" maxlength="3000">${escapeHtml(book.synopsis || "")}</textarea></label><label data-completion-label ${book.status === "read" ? "" : "hidden"}>Date finished (optional)<input name="completedAt" data-initial-date="${completionDateInput(book.completedAt)}" type="date" max="${localDateKey()}" value="${completionDateInput(book.completedAt)}" ${book.status === "read" ? "" : "disabled"}><small>Leave blank if you don’t know the date.</small></label><button type="submit" class="button">Save changes</button><p class="form-message" role="status"></p></form></details>`;
 }
 async function savePersonalEntry(event, book) {
   event.preventDefault();
@@ -1523,7 +1560,7 @@ function renderShelf(entries) {
   const finishedWithPages = entries.filter((entry) => entry.status === "read" && pageCountValue(entry.pageCount));
   const knownPages = finishedWithPages.reduce((sum, entry) => sum + pageCountValue(entry.pageCount), 0);
   stats.innerHTML = `<span>${entries.length} ${entries.length === 1 ? "book" : "books"} on shelf</span>`;
-  if (snapshot) snapshot.innerHTML = own || member.showReadingStats !== false ? `<article class="reading-summary-card"><strong>${entries.length}</strong><span>books collected</span></article><article class="reading-summary-card"><strong>${read}</strong><span>finished</span></article><article class="reading-summary-card"><strong>${reading}</strong><span>currently reading</span></article><article class="reading-summary-card"><strong>${wanted}</strong><span>want to read</span></article><article class="reading-summary-card"><strong>${escapeHtml(topGenre)}</strong><span>most-shelved genre</span></article>${knownPages ? `<article class="reading-summary-card"><strong>${knownPages.toLocaleString()}</strong><span>${finishedWithPages.length === read ? "pages finished" : `known pages across ${finishedWithPages.length} finished books`}</span></article>` : ""}` : '<p class="empty-state">This member keeps their reading summary private.</p>';
+  if (snapshot) snapshot.innerHTML = own || member.showReadingStats !== false ? `<article class="reading-summary-card"><strong>${entries.length}</strong><span>books collected</span></article><article class="reading-summary-card"><strong>${read}</strong><span>finished</span></article><article class="reading-summary-card"><strong>${reading}</strong><span>currently reading</span></article><article class="reading-summary-card"><strong>${wanted}</strong><span>want to read</span></article><article class="reading-summary-card"><strong>${escapeHtml(topGenre)}</strong><span>most-shelved genre</span></article>${knownPages ? `<article class="reading-summary-card"><strong>${knownPages.toLocaleString()}</strong><span>${finishedWithPages.length === read ? "pages finished" : `known pages across ${finishedWithPages.length} finished books`}</span></article>` : ""}` : '<p class="empty-state">Summary cards are hidden. This member’s shelf remains public.</p>';
   if (favorites) {
     const favoriteEntries = preferredIds.map((id) => entries.find((entry) => entry.id === id)).filter(Boolean).slice(0, 3);
     favorites.removeAttribute("aria-busy");
@@ -1793,6 +1830,7 @@ onSnapshot(collection(db, "boardPosts"), (snapshot) => { state.boardPosts = snap
 ui.signIn.addEventListener("click", signIn); ui.signOut.addEventListener("click", () => signOut(auth)); ui.profile.addEventListener("click", () => openProfile(state.user.uid)); ui.dashboardOpenLibrary.addEventListener("click", () => openProfile(state.user.uid));
 ui.profileDialog.addEventListener("close", () => { state.profileRequest = null; state.stopShelf?.(); state.stopShelf = null; state.stopProfileActivity?.(); state.stopProfileActivity = null; state.openProfileMember = null; });
 ui.bookDialog.addEventListener("close", stopBookSocialSubscriptions);
+$("catalogBackButton").addEventListener("click", returnToCatalogResults);
 ui.catalogDialog.addEventListener("close", () => { state.catalogSearchToken = {}; state.catalogSelectionToken = {}; });
 ui.notificationButton.addEventListener("click", () => { renderNotifications(); showDialog(ui.notificationDialog); });
 ui.markNotificationsRead.addEventListener("click", markAllNotificationsRead);
@@ -1929,3 +1967,4 @@ $("memoryPhotoDialog").addEventListener("keydown", (event) => {
 
 $("memoryStopUploads").addEventListener("click", stopMemoryUploads);
 window.addEventListener("beforeunload", (event) => { if (state.memoryUploading || state.memoryUploadQueue?.some((item) => !item.saved)) { event.preventDefault(); event.returnValue = ""; } });
+

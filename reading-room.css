@@ -84,7 +84,10 @@ summary:focus-visible,button:focus-visible,a:focus-visible { outline:3px solid v
 .profile-layout .profile-side { background:var(--paper); color:var(--ink); border-top:5px solid var(--accent); }
 .profile-side p,.profile-side label { color:var(--muted); }
 .profile-meta span { color:var(--ink); background:var(--surface); }
-.site-footer { background:var(--surface); color:var(--ink); }
+.site-footer, html[data-theme="dark"] .site-footer { background:var(--surface); color:var(--ink); }
+.catalog-preview { scroll-margin-block:20px; }
+#catalogSelectedTitle { outline-offset:5px; }
+#catalogShelfVisibility { display:block; color:var(--muted); font-size:13px; line-height:1.5; }
 @media (max-width:1000px) {
   .site-header { flex-wrap:wrap; gap:10px; }
   .desktop-nav { gap:12px; }
@@ -224,3 +227,4 @@ body:has(#memoryPhotoDialog[open]) { overflow:hidden; }
 
 .pin-avatar { width:36px; height:36px; min-width:36px; min-height:36px; overflow:hidden; }
 .pin-avatar img { display:block; width:36px; height:36px; object-fit:cover; border-radius:50%; }
+

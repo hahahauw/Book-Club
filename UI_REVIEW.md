@@ -1,4 +1,20 @@
-# Reading-room UI refresh
+# UI changes and validation
+
+## Catalogue and trust baseline — 12 September 2026
+
+Prepared from main `522ddeaf240414f0c9b7f5294a0f8002920fa1dd`.
+
+- Rename the shelf catalogue entry to **Find a book** and explain member/guest destinations.
+- Show selected details in place of the results list, focus the book heading, and scroll the preview into view. **Back to results** restores the selected result's focus and leaves the query/results intact. Preserve stale-response tokens, locked saves and manual fallback.
+- Use measured header height for anchor offsets, including changes caused by wrapping or authentication controls. Give the reading-room footer the same surface/ink palette in both themes.
+- Label shelf notes as public beside catalogue, manual-add and edit controls. Explain that hiding summary cards does not make the underlying shelf private. Replace claims of verified page counts and internal development-phase wording.
+- Disclose catalogue text shortening and edition uncertainty before saving. Apply one metadata contract to personal, recommendation, guest and officer approval writes.
+
+Validation: **93 frontend/regression checks and 9 local Firestore emulator checks passed**, including catalogue focus/return for results 1, 9 and 18, detail-load fallback, long metadata, all save destinations, older pending synopsis approval, current public-note access and existing security/transaction regressions. JavaScript syntax and git whitespace checks passed. The old frontend shelf submission fixture was updated for the existing transactional helper; it had stopped matching the application before this batch.
+
+The browser rejected the isolated localhost preview with `ERR_BLOCKED_BY_CLIENT`. No rendered desktop/mobile/tablet, actual device keyboard, assistive-technology or authenticated staging checks are claimed. The CSS palette/offset repair has source and behavior coverage, not measured rendered evidence. Keep the pull request draft until the device/theme checklist in `tests/README.md` is completed. Production Firebase rules parity is separately unverified; see `SECURITY_REVIEW.md`.
+
+## Earlier reading-room UI refresh (historical)
 
 This draft builds on `fix/security-first-batch`. Review the UI diff against that branch; merge the security batch first before integrating this work into main. No production data, rules, releases, or deployment settings were changed.
 
